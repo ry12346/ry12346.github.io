@@ -201,7 +201,7 @@ function openDetail(h) {
         ${s ? `
           <div class="tags" style="justify-content:flex-start;margin:0 0 6px">
             <span class="tag kind">${esc(s.kind)}</span>
-            ${s.rate ? `<span class="tag rate">発動 ${esc(s.rate)}</span>` : ""}
+            ${s.rate ? `<span class="tag rate">発動 ${esc(s.rate)}${s.rateUnsure ? "?" : ""}</span>` : ""}
             ${s.effectTypes.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
             <span class="tag src">${esc(s.target)}</span>
           </div>

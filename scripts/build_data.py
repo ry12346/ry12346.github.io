@@ -6,7 +6,9 @@
 マスタの土台は Qookka 公開設定 cfg.json（IDが主キー）。
 ステータス・成長値・数値入り効果文・発動確率は外部ページから名前で突き合わせて補う。
 """
+import difflib
 import html as htmllib
+import unicodedata
 import json
 import re
 from datetime import datetime, timezone, timedelta
@@ -18,6 +20,7 @@ OUT = ROOT / "data"
 
 JST = timezone(timedelta(hours=9))
 GRADE = {5: "S", 4: "A", 3: "B", 2: "C", 1: "D"}
+DESC_MATCH = 0.7  # 外部の効果文を採用する、公式の説明文との最低類似度（別の効果文は0.5以下、言い回し違いは0.7〜0.85）
 MAIN_KINDS = {"主动", "被动", "指挥", "突击", "兵种", "阵法"}
 STAT_KEYS = [("武勇", "bu"), ("知略", "chi"), ("統率", "tou"), ("速度", "spd"), ("政務", "sei"), ("魅力", "mi")]
 
@@ -36,7 +39,8 @@ NAME_FIXES = {
 def text(s: str) -> str:
     s = re.sub(r"<br\s*/?>", "\n", s)
     s = re.sub(r"<[^>]+>", "", s)
-    return re.sub(r"[ \t\r\f\v]+", " ", htmllib.unescape(s)).strip()
+    s = re.sub(r"[☀-➿\U0001f300-\U0001faff️]", "", htmllib.unescape(s))  # 装飾の絵文字
+    return re.sub(r"[ \t\r\f\v]+", " ", s).strip()
 
 
 # 外部サイトとcfgで表記が違う名前（外部の表記 → cfgの日本語名）
@@ -51,10 +55,32 @@ ALIASES = {
 VARIANTS = str.maketrans({"髙": "高", "熙": "煕", "簞": "箪", "訚": "誾", "凛": "凜"})
 
 
+def norm_raw(name: str) -> str:
+    return re.sub(r"[\s・·･]", "", name).translate(VARIANTS)
+
+
 def norm(name: str) -> str:
     """名前照合用の正規化（中黒・空白・異体字のゆれを吸収）"""
-    name = re.sub(r"[\s・·･]", "", name).translate(VARIANTS)
+    name = norm_raw(name)
     return ALIASES.get(name, name)
+
+
+def put(out: dict, name: str, value) -> None:
+    """別名で入ってきた行が、正式名で入っている行を上書きしないようにする"""
+    key = norm(name)
+    if key not in out or norm_raw(name) == key:
+        out[key] = value
+
+
+def core(t: str) -> str:
+    """効果文の比較用: 数値・○・記号・空白を除いた骨格"""
+    t = unicodedata.normalize("NFKC", t)
+    t = re.sub(r"[\d.]+%?(→[\d.]+%?)?|○%?", "", t)
+    return re.sub(r"[\s、。,.()（）「」【】:：;；~～・/]", "", t)
+
+
+def similarity(a: str, b: str) -> float:
+    return difflib.SequenceMatcher(None, core(a), core(b)).ratio()
 
 
 # ---------------------------------------------------------------- Qookka cfg
@@ -206,7 +232,7 @@ def parse_kenbo_senpo(path: Path):
         if tds.get("大将技") and tds["大将技"] not in ("-", "－"):
             desc += "\n大将技：" + tds["大将技"]
         rate = tds.get("発動率", "")
-        out[norm(tds["戦法名"])] = {"rate": rate if re.search(r"\d", rate) else "", "desc": desc}
+        put(out, tds["戦法名"], {"rate": rate if re.search(r"\d", rate) else "", "desc": desc})
     return out
 
 
@@ -256,14 +282,16 @@ def main():
             "descHasValues": False,
             "valuesNote": "",
             "rate": "",
+            "rateUnsure": False,
             "source": "",
             "owners": [],
             "teachers": [],
             "officialOnly": True,  # 外部ソースのどれにも載っていない（未実装の可能性）
+            "_cands": [],  # 数値入り効果文の候補 (出典, 文, Lv10のみか)
         }
         w = hz_tac.get(norm(name))
         if w:
-            rec["desc"], rec["descHasValues"] = w["effect"], True
+            rec["_cands"].append(("wiki", w["effect"], False))
             rec["teachers"] = w["teachers"]
             rec["officialOnly"] = False
         sl = slg.get(norm(name))
@@ -308,8 +336,8 @@ def main():
             rec["stats"] = w["stats"] or None
             rec["troopBonus"] = w["troopBonus"]
             rec["traits"] = w["traits"]
-            if sid and not skills[sid]["descHasValues"] and w.get("uniqueEffect"):
-                skills[sid]["desc"], skills[sid]["descHasValues"] = w["uniqueEffect"], True
+            if sid and w.get("uniqueEffect"):
+                skills[sid]["_cands"].append(("wiki武将", w["uniqueEffect"], False))
                 skills[sid]["officialOnly"] = False
             if sid and not skills[sid]["rate"] and w.get("uniqueEffect"):
                 r = re.search(r"発動確率\s*(\d+%(?:→\d+%)?)", w["uniqueEffect"])
@@ -332,26 +360,50 @@ def main():
         if rec["star"] >= 4 and rec["cost"] > 2:  # 星1〜3・コスト2の武将は一覧に載せない
             heroes.append(rec)
 
-    # Wikiで数値入りの効果文が取れなかった戦法は SLGSIM の詳細ページ → kenbo（Lv10の値のみ）の順で補う
+    # 数値入り効果文の候補: Wiki → Wiki武将ページ → SLGSIM詳細 → kenbo（Lv10の値のみ）
     by_name = {norm(s["name"]): s for s in skills.values()}
     for key, sl in slg.items():
         s = by_name.get(key)
         p = CACHE / "slg" / "skill" / f"{sl.get('slug')}.html"
-        if s and not s["descHasValues"] and p.exists():
+        if s and p.exists():
             desc = parse_slg_skill(p)
             if desc:
-                s["desc"], s["descHasValues"] = desc, True
+                s["_cands"].append(("SLGSIM", desc, False))
     for key, s in by_name.items():
         k = ken_tac.get(key)
         if not k:
             continue
-        if not s["descHasValues"] and k["desc"]:
-            s["desc"], s["descHasValues"], s["valuesNote"] = k["desc"], True, "数値はLv10の値"
-        if not s["rate"] and k["rate"]:
-            s["rate"] = k["rate"]
+        if k["desc"]:
+            s["_cands"].append(("kenbo", k["desc"], True))
+        if k["rate"]:
+            lv10 = lambda r: (re.findall(r"(\d+(?:\.\d+)?)%", r) or [None])[-1]
+            if not s["rate"]:
+                s["rate"] = k["rate"]
+            elif lv10(s["rate"]) != lv10(k["rate"]):
+                # SLGSIM と kenbo で食い違う: kenbo の方が公式の効果文とよく一致するので kenbo を採り、要確認にする
+                s["rate"], s["rateUnsure"] = k["rate"], True
+
+    # 公式の説明文（数値は○）に最も近い候補を採用する。
+    # 外部サイトには別の効果文や途中で切れた文が混じっているため（例: SLGSIMの越後先手組）、
+    # 類似度が DESC_MATCH 未満なら採用しない。Lv1→Lv10 が分かる候補は、ほぼ同等なら優先する。
+    rejected = []
     for s in skills.values():
-        if not s["rate"] and s["kind"] in ("指揮", "受動", "兵種", "陣法"):
-            s["rate"] = "100%"
+        official = s["desc"]
+        scored = [(similarity(official, cand), i, src, cand, lv10) for i, (src, cand, lv10) in enumerate(s["_cands"])]
+        if scored:
+            top = max(x[0] for x in scored)
+            near = [x for x in scored if x[0] >= top - 0.05 and x[0] >= DESC_MATCH]
+            near.sort(key=lambda x: (x[4], x[1]))  # Lv1→Lv10 の候補を優先、次に出典の優先順
+            if near:
+                _, _, src, cand, lv10 = near[0]
+                s["desc"], s["descHasValues"] = cand, True
+                s["valuesNote"] = "数値はLv10の値" if lv10 else ""
+                s["_from"] = src
+            rejected += [(s["name"], x[2], round(x[0], 2)) for x in scored if x[0] < DESC_MATCH]
+        del s["_cands"]
+    for s in skills.values():
+        if s["kind"] in ("指揮", "受動", "兵種", "陣法"):  # 戦闘中常に発動する種別
+            s["rate"], s["rateUnsure"] = "100%", False
         # 読みがな: 手入力の data/kana.json を最優先
         key = norm(s["name"])
         if key in kana_fix:
@@ -361,6 +413,7 @@ def main():
         if s["source"] == "伝授戦法" and not s["teachers"] and s["owners"]:
             s["teachers"], s["owners"] = s["owners"], []
 
+    chosen_from = {s["name"]: s.pop("_from", "公式") for s in skills.values()}
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))
 
     OUT.mkdir(exist_ok=True)
@@ -392,6 +445,8 @@ def main():
     print("ステータス未取得:", [x["name"] for x in heroes if not x["stats"] and not x["lv50"]])
     print("読みがな未設定の戦法:", [s["name"] for s in skill_list if not s["kana"]])
     print("公式データのみの戦法:", [s["name"] for s in skill_list if s["officialOnly"]])
+    print(f"公式の説明文と一致せず不採用にした効果文（類似度 < {DESC_MATCH}）:", rejected)
+    print("数値なし（公式の説明文のまま）:", [s["name"] for s in skill_list if not s["descHasValues"]])
 
 
 if __name__ == "__main__":

@@ -86,7 +86,7 @@ function card(s) {
       <h3>${s.kana ? `<small>${esc(s.kana)}${s.kanaUnsure ? '<span class="kana-q" title="読みは要確認">?</span>' : ""}</small>` : ""}${esc(s.name)}</h3>
       <div class="tags">
         <span class="tag kind">${esc(s.kind)}</span>
-        ${s.rate ? `<span class="tag rate">${esc(s.rate)}</span>` : ""}
+        ${s.rate ? `<span class="tag rate"${s.rateUnsure ? ' title="攻略サイト間で値が食い違うため要確認"' : ""}>${esc(s.rate)}${s.rateUnsure ? "?" : ""}</span>` : ""}
       </div>
     </div>
     <div class="tags" style="justify-content:flex-start;margin:0">
