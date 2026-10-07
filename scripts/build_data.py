@@ -46,7 +46,7 @@ ALIASES = {
     "弾嵐雨霞": "弾嵐雨霰",
     "雷神切り": "雷神斬り",
 }
-VARIANTS = str.maketrans({"髙": "高", "熙": "煕", "簞": "箪", "訚": "誾"})
+VARIANTS = str.maketrans({"髙": "高", "熙": "煕", "簞": "箪", "訚": "誾", "凛": "凜"})
 
 
 def norm(name: str) -> str:
@@ -153,6 +153,61 @@ def parse_slg_skill(path: Path):
     return text(m.group(1)) if m else ""
 
 
+SLG_STAT = {"bu": "bu", "chi": "chi", "tou": "tou", "spd": "spd", "gov": "sei", "cha": "mi"}
+
+
+def parse_slg_generals(path: Path):
+    """SLGSIM 武将一覧: Lv50の値とよみ。※Wikiと1割ほど食い違うので kenbo が無いときだけ使う"""
+    h = path.read_text(encoding="utf-8")
+    out = {}
+    for a, body in re.findall(r'(<a href="/hero/[^"]+" class="hero-card[^>]*>)(.*?)</h3>', h, re.S):
+        d = dict(re.findall(r'data-([a-z-]+)="([^"]*)"', a))
+        name = text(re.search(r"<h3[^>]*>(.*)", body, re.S).group(1))
+        kana = next((t for t in d.get("search", "").split() if re.fullmatch(r"[ぁ-ゖー]+", t)), "")
+        lv50 = {ours: int(float(d[k])) for k, ours in SLG_STAT.items() if d.get(k, "").replace(".", "").isdigit()}
+        out[norm(name)] = {"kana": kana, "lv50": lv50 if len(lv50) == 6 and any(lv50.values()) else None}
+    return out
+
+
+KENBO_STAT = [("武勇", "bu"), ("知略", "chi"), ("統率", "tou"), ("速度", "spd"), ("政務", "sei"), ("魅力", "mi")]
+KENBO_RANK = {"主特性": "無凸", "ランク1": "1凸", "ランク2": "2凸", "ランク3": "3凸", "ランク4": "4凸", "ランク5": "5凸"}
+
+
+def parse_kenbo_busho(path: Path):
+    """kenbo 武将データベース: Lv50の値（Wikiと一致することを確認済み）と凸別特性"""
+    h = path.read_text(encoding="utf-8")
+    out = {}
+    for attrs, row in re.findall(r"<tr (data-faction[^>]*)>(.*?)</tr>", h, re.S):
+        name = re.search(r'data-busho-name="([^"]*)"', attrs)
+        if not name:
+            continue
+        tds = {lab: text(v) for lab, v in re.findall(r'<td data-label="([^"]*)"[^>]*>(.*?)</td>', row, re.S)}
+        lv50 = {key: int(tds[lab]) for lab, key in KENBO_STAT if tds.get(lab, "").isdigit()}
+        traits = []
+        for label, tname, eff in re.findall(
+            r'<div class="tokusei-slot-label">(.*?)</div>\s*<button[^>]*data-name="([^"]*)" data-effect="([^"]*)"', row, re.S
+        ):
+            traits.append({"rank": KENBO_RANK.get(text(label), text(label)), "name": htmllib.unescape(tname), "effect": htmllib.unescape(eff)})
+        out[norm(name.group(1))] = {"lv50": lv50 if len(lv50) == 6 else None, "traits": traits}
+    return out
+
+
+def parse_kenbo_senpo(path: Path):
+    """kenbo 戦法データベース: 発動率と効果（数値はLv10の値のみ）"""
+    h = path.read_text(encoding="utf-8")
+    out = {}
+    for row in re.findall(r"<tr data-kind=[^>]*>(.*?)</tr>", h, re.S):
+        tds = {lab: text(v) for lab, v in re.findall(r'<td data-label="([^"]*)"[^>]*>(.*?)</td>', row, re.S)}
+        if not tds.get("戦法名"):
+            continue
+        desc = tds.get("効果", "")
+        if tds.get("大将技") and tds["大将技"] not in ("-", "－"):
+            desc += "\n大将技：" + tds["大将技"]
+        rate = tds.get("発動率", "")
+        out[norm(tds["戦法名"])] = {"rate": rate if re.search(r"\d", rate) else "", "desc": desc}
+    return out
+
+
 # ---------------------------------------------------------------- build
 def main():
     cfg, ja = load_cfg()
@@ -169,6 +224,13 @@ def main():
         if r:
             hz_tac[norm(r["name"])] = r
     slg = parse_slg_tactics(CACHE / "slg" / "tactics.html") if (CACHE / "slg" / "tactics.html").exists() else {}
+    slg_gen = parse_slg_generals(CACHE / "slg" / "generals.html") if (CACHE / "slg" / "generals.html").exists() else {}
+    ken_gen = parse_kenbo_busho(CACHE / "kenbo" / "busho.html") if (CACHE / "kenbo" / "busho.html").exists() else {}
+    ken_tac = parse_kenbo_senpo(CACHE / "kenbo" / "senpo.html") if (CACHE / "kenbo" / "senpo.html").exists() else {}
+    kana_file = json.loads((OUT / "kana.json").read_text(encoding="utf-8")) if (OUT / "kana.json").exists() else {}
+    kana_fix = {norm(k): v for k, v in kana_file.get("読み", {}).items()}
+    kana_unsure = {norm(k) for k in kana_file.get("要確認", [])}
+    hero_kana = {norm(k): v for k, v in kana_file.get("武将の読み", {}).items()}
 
     # ---- 戦法
     skills = {}
@@ -181,33 +243,35 @@ def main():
             "id": s["id"],
             "name": name,
             "kana": "",
+            "kanaUnsure": False,
             "grade": GRADE.get(s["grade"], str(s["grade"])),
             "kind": tr(s["skill_kind"]),
             "effectTypes": [tr(e) for e in s["effect_type_list"]],
             "troops": [tr(a) for a in s["arm_limit"]],
             "target": tr(s["target_tips"]),
             "summary": tr(s["short_tips"]),
-            "desc": "",
+            "desc": official_tips(tr(s["tips"])),
             "descHasValues": False,
+            "valuesNote": "",
             "rate": "",
             "source": "",
             "owners": [],
             "teachers": [],
+            "officialOnly": True,  # 外部ソースのどれにも載っていない（未実装の可能性）
         }
-        official = official_tips(tr(s["tips"]))
         w = hz_tac.get(norm(name))
         if w:
             rec["desc"], rec["descHasValues"] = w["effect"], True
             rec["teachers"] = w["teachers"]
-        else:
-            rec["desc"] = official
+            rec["officialOnly"] = False
         sl = slg.get(norm(name))
         if sl:
             rec["rate"] = sl["rate"]
             rec["source"] = sl["source"]
             rec["kana"] = sl["kana"]
-        if not rec["rate"] and rec["kind"] in ("指揮", "受動", "兵種", "陣法"):
-            rec["rate"] = "100%"
+            rec["officialOnly"] = False
+        if norm(name) in ken_tac:
+            rec["officialOnly"] = False
         skills[s["id"]] = rec
         by_cn.setdefault(s["name"], s["id"])
 
@@ -229,38 +293,67 @@ def main():
             "family": tr(h["family"]),
             "uniqueSkillId": sid,
             "uniqueSkill": skills[sid]["name"] if sid else tr(h["born_skill"]),
-            "stats": None,
+            "stats": None,  # {key: [Lv1, 成長値]}
+            "lv50": None,  # Lv1・成長値が無い武将のみ: {key: Lv50の値}
             "troopBonus": [],
             "traits": [],
         }
-        w = hz_gen.get(norm(name))
+        key = norm(name)
+        w = hz_gen.get(key)
         if w:
-            unmatched_hz.discard(norm(name))
+            unmatched_hz.discard(key)
             rec["kana"] = w["kana"]
             rec["stats"] = w["stats"] or None
             rec["troopBonus"] = w["troopBonus"]
             rec["traits"] = w["traits"]
             if sid and not skills[sid]["descHasValues"] and w.get("uniqueEffect"):
                 skills[sid]["desc"], skills[sid]["descHasValues"] = w["uniqueEffect"], True
+                skills[sid]["officialOnly"] = False
             if sid and not skills[sid]["rate"] and w.get("uniqueEffect"):
                 r = re.search(r"発動確率\s*(\d+%(?:→\d+%)?)", w["uniqueEffect"])
                 if r:
                     skills[sid]["rate"] = r.group(1)
+        if not rec["stats"]:
+            # Lv1・成長値はどこにも無いので Lv50 の値だけ持つ（kenbo を優先。SLGSIM は Wiki と1割ほど食い違うため）
+            rec["lv50"] = (ken_gen.get(key) or {}).get("lv50") or (slg_gen.get(key) or {}).get("lv50")
+        if not rec["traits"] and key in ken_gen:
+            rec["traits"] = ken_gen[key]["traits"]
+        if not rec["kana"] and key in slg_gen:
+            rec["kana"] = slg_gen[key]["kana"]
+        rec["kana"] = hero_kana.get(key, rec["kana"])
         if sid:
             skills[sid]["owners"].append(name)
             if not skills[sid]["source"]:
                 skills[sid]["source"] = "固有戦法"
+            if rec["stats"] or rec["lv50"]:  # 外部ソースに載っている武将の固有戦法なら実装済み
+                skills[sid]["officialOnly"] = False
         heroes.append(rec)
 
-    # Wikiで数値入りの効果文が取れなかった戦法は SLGSIM の詳細ページで補う
-    slg_by_name = {norm(s["name"]): s for s in skills.values()}
+    # Wikiで数値入りの効果文が取れなかった戦法は SLGSIM の詳細ページ → kenbo（Lv10の値のみ）の順で補う
+    by_name = {norm(s["name"]): s for s in skills.values()}
     for key, sl in slg.items():
-        s = slg_by_name.get(key)
+        s = by_name.get(key)
         p = CACHE / "slg" / "skill" / f"{sl.get('slug')}.html"
         if s and not s["descHasValues"] and p.exists():
             desc = parse_slg_skill(p)
             if desc:
                 s["desc"], s["descHasValues"] = desc, True
+    for key, s in by_name.items():
+        k = ken_tac.get(key)
+        if not k:
+            continue
+        if not s["descHasValues"] and k["desc"]:
+            s["desc"], s["descHasValues"], s["valuesNote"] = k["desc"], True, "数値はLv10の値"
+        if not s["rate"] and k["rate"]:
+            s["rate"] = k["rate"]
+    for s in skills.values():
+        if not s["rate"] and s["kind"] in ("指揮", "受動", "兵種", "陣法"):
+            s["rate"] = "100%"
+        # 読みがな: 手入力の data/kana.json を最優先
+        key = norm(s["name"])
+        if key in kana_fix:
+            s["kana"] = kana_fix[key]
+        s["kanaUnsure"] = key in kana_unsure
 
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))
 
@@ -273,25 +366,26 @@ def main():
         "cfgVersion": cfg.get("version"),
         "heroCount": len(heroes),
         "heroWithStats": sum(1 for x in heroes if x["stats"]),
+        "heroWithLv50Only": sum(1 for x in heroes if x["lv50"]),
         "skillCount": len(skill_list),
         "skillWithValues": sum(1 for x in skill_list if x["descHasValues"]),
         "skillWithRate": sum(1 for x in skill_list if x["rate"]),
+        "skillOfficialOnly": sum(1 for x in skill_list if x["officialOnly"]),
     }
     dump("meta.json", meta)
 
     # ---- レポート
     print(json.dumps(meta, ensure_ascii=False, indent=1))
-    untrans = [x["name"] for x in heroes if re.search(r"[一-鿿]", x["name"]) and x["name"] != x["name"]]
+    names = {norm(s["name"]) for s in skill_list}
     if unmatched_hz:
         print("Wiki武将のうちcfgに一致しなかった名前:", sorted(hz_gen[k]["name"] for k in unmatched_hz))
-    unmatched_tac = [hz_tac[k]["name"] for k in hz_tac if k not in {norm(s["name"]) for s in skill_list}]
-    if unmatched_tac:
-        print("Wiki戦法のうちcfgに一致しなかった名前:", unmatched_tac)
-    unmatched_slg = [k for k in slg if k not in {norm(s["name"]) for s in skill_list}]
-    if unmatched_slg:
-        print("SLGSIM戦法のうちcfgに一致しなかった名前:", unmatched_slg)
-    no_stats = [x["name"] for x in heroes if not x["stats"] and x["star"] >= 3]
-    print(f"ステータス未取得の星3以上: {len(no_stats)}件", no_stats)
+    for label, src in (("Wiki戦法", hz_tac), ("SLGSIM戦法", slg), ("kenbo戦法", ken_tac)):
+        miss = [k for k in src if k not in names]
+        if miss:
+            print(f"{label}のうちcfgに一致しなかった名前:", miss)
+    print("ステータス未取得:", [x["name"] for x in heroes if not x["stats"] and not x["lv50"]])
+    print("読みがな未設定の戦法:", [s["name"] for s in skill_list if not s["kana"]])
+    print("公式データのみの戦法:", [s["name"] for s in skill_list if s["officialOnly"]])
 
 
 if __name__ == "__main__":

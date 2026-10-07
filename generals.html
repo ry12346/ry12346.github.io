@@ -43,7 +43,7 @@
       <tbody></tbody>
     </table>
   </div>
-  <p class="note">成長値は1レベル上がるごとの上昇量です。Lv N の値 ＝ Lv1 ＋ 成長値 ×（N − 1）。ステータスが「—」の武将は未収録です。</p>
+  <p class="note">成長値は1レベル上がるごとの上昇量です。Lv N の値 ＝ Lv1 ＋ 成長値 ×（N − 1）。「Lv50のみ」の武将はLv1・成長値が未収録で、灰色の数字はLv50の値です。ステータスが「—」の武将は未収録です。</p>
 </main>
 
 <dialog id="dlg"></dialog>
@@ -63,8 +63,13 @@ let level = 50;
 let sortKey = null;
 let sortDir = -1;
 
-const valueAt = (h, k, lv) => (h.stats?.[k] ? h.stats[k][0] + h.stats[k][1] * (lv - 1) : null);
-const totalAt = (h, lv) => (h.stats ? STATS.reduce((a, [k]) => a + (valueAt(h, k, lv) ?? 0), 0) : null);
+// h.stats = {key: [Lv1, 成長値]}。Lv1・成長値が未収録の武将は h.lv50 = {key: Lv50の値} だけを持つ
+const valueAt = (h, k, lv) => {
+  if (h.stats?.[k]) return h.stats[k][0] + h.stats[k][1] * (lv - 1);
+  if (h.lv50 && lv === 50) return h.lv50[k];
+  return null;
+};
+const totalAt = (h, lv) => (h.stats || (h.lv50 && lv === 50) ? STATS.reduce((a, [k]) => a + (valueAt(h, k, lv) ?? 0), 0) : null);
 const shownLv = () => (mode === "lv1" ? 1 : level);
 
 const COLS = [
@@ -115,6 +120,8 @@ function fmt(v, digits = 0) {
 }
 
 function statCell(h, k) {
+  if (!h.stats?.[k] && h.lv50 && mode === "lv1") return `<td class="num"><span class="lv50only" title="Lv50の値（Lv1・成長値は未収録）">${h.lv50[k]}</span></td>`;
+  if (!h.stats?.[k] && h.lv50 && level === 50) return `<td class="num">${h.lv50[k]}</td>`;
   if (!h.stats?.[k]) return `<td class="num"><span class="na">—</span></td>`;
   const [base, g] = h.stats[k];
   if (mode === "lv1") return `<td class="num">${fmt(base)}<span class="growth">+${g.toFixed(2)}</span></td>`;
@@ -138,12 +145,12 @@ function render() {
   $("#tbl tbody").innerHTML = rows.length
     ? rows.map((h) => `
       <tr data-id="${h.id}">
-        <td class="name">${esc(h.name)}${h.kana ? `<span class="kana">${esc(h.kana)}</span>` : ""}</td>
+        <td class="name">${esc(h.name)}${h.lv50 ? ' <span class="badge-lv50">Lv50のみ</span>' : ""}${h.kana ? `<span class="kana">${esc(h.kana)}</span>` : ""}</td>
         <td class="num"><span class="stars">${"★".repeat(h.star)}</span></td>
         <td><span class="fac" data-f="${esc(h.faction)}">${esc(h.faction)}</span></td>
         <td class="num">${h.cost}</td>
         ${STATS.map(([k]) => statCell(h, k)).join("")}
-        <td class="num">${mode === "lv1" ? fmt(totalAt(h, 1)) : fmt(totalAt(h, level), 1)}</td>
+        <td class="num">${mode === "lv1" ? (h.lv50 ? `<span class="lv50only">${totalAt(h, 50)}</span>` : fmt(totalAt(h, 1))) : fmt(totalAt(h, level), h.lv50 ? 0 : 1)}</td>
         <td>${esc(h.uniqueSkill)}</td>
         <td>${esc(h.troopBonus.map((t) => t.troop + t.value).join(" "))}</td>
       </tr>`).join("")
@@ -179,7 +186,15 @@ function openDetail(h) {
               <td>${valueAt(h, k, 20).toFixed(1)}</td><td>${valueAt(h, k, 40).toFixed(1)}</td><td>${valueAt(h, k, 50).toFixed(1)}</td></tr>` : "").join("")}
             <tr><td><b>合計</b></td><td><b>${totalAt(h, 1)}</b></td><td></td><td>${totalAt(h, 20).toFixed(1)}</td><td>${totalAt(h, 40).toFixed(1)}</td><td><b>${totalAt(h, 50).toFixed(1)}</b></td></tr>
           </tbody>
-        </table>` : `<p class="muted small">ステータスは未収録です。</p>`}
+        </table>` : h.lv50 ? `
+        <table class="mini">
+          <thead><tr><th>属性</th><th>Lv50</th></tr></thead>
+          <tbody>
+            ${STATS.map(([k, label]) => `<tr><td>${label}</td><td>${h.lv50[k]}</td></tr>`).join("")}
+            <tr><td><b>合計</b></td><td><b>${totalAt(h, 50)}</b></td></tr>
+          </tbody>
+        </table>
+        <p class="muted small">Lv1の値と成長値は未収録のため、Lv50の値のみ表示しています。</p>` : `<p class="muted small">ステータスは未収録です。</p>`}
       </section>
       <section>
         <h3>固有戦法：${esc(h.uniqueSkill)}</h3>

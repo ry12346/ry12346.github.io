@@ -7,7 +7,8 @@
   - Qookka 公開設定 cfg.json（武将・戦法マスタ、日本語訳）
   - はてなの真戦Wiki 武将ページ（Lv1・成長値・兵種ボーナス・固有戦法の数値入り効果）
   - はてなの真戦Wiki 戦法伝授ページ（伝授戦法の数値入り効果）
-  - SLGSIM 戦法一覧（発動確率）
+  - SLGSIM 戦法一覧・詳細（発動確率、数値入り効果）、武将一覧（Lv50の値）
+  - kenbo-no-palette 武将・戦法データベース（Lv50の値、凸別特性、発動確率、Lv10の効果）
 """
 import gzip
 import re
@@ -24,6 +25,7 @@ WAIT = 1.0  # 相手サーバーへの負荷を避けるための間隔（秒）
 CFG_URL = "https://p11386-media-cdn.qookkagames.com/P11386/sns/public_config/release/cfg.json"
 HZ = "https://www.sanguo-zhi.com"
 SLG = "https://slgsim.com"
+KENBO = "https://kenbo-no-palette.com"
 
 force = "--force" in sys.argv
 
@@ -70,6 +72,13 @@ def main() -> None:
     print(f"  {len(slugs)} 件")
     for s in slugs:
         save(f"{HZ}/wiki/tactic/{s}/", CACHE / "hz" / "tactic" / f"{s}.html")
+
+    print("SLGSIM 武将一覧")
+    save(f"{SLG}/generals", CACHE / "slg" / "generals.html")
+
+    print("kenbo-no-palette 武将・戦法データベース")
+    save(f"{KENBO}/database/busho/", CACHE / "kenbo" / "busho.html")
+    save(f"{KENBO}/database/senpo/", CACHE / "kenbo" / "senpo.html")
 
     print("SLGSIM 戦法")
     html = save(f"{SLG}/tactics", CACHE / "slg" / "tactics.html").decode("utf-8")
