@@ -131,14 +131,15 @@ def fill_template(raw: str, values: dict) -> str:
     return re.sub(r"\{(\d+)(%?)\}", lambda m: format_value(values[m.group(1)], bool(m.group(2))), raw)
 
 
-def summarize_generals(names: list, roster: dict) -> str:
+def summarize_generals(names: list, roster: dict):
     """交換に使う武将の一覧を「群雄の★4」「武田家の★5」のようなまとまりで短く表す。
-    roster = {武将名: (勢力, 家, 星)}。まとまりの全員が含まれるものを優先し、
-    次に「〜以外」が2名以内のまとまりを使い、残りは名前を並べる。"""
+    roster = {武将名: (勢力, 家, 星)}。返り値は (表示用の文, 交換武将の一覧)。
+    まとまりの7割以上が含まれ、外れているのが2名以内なら、後から追加された武将が
+    元の一覧に載っていないだけとみなして、まとまり全員を交換武将に含める。"""
     if len(names) <= 3:
-        return "・".join(names)
+        return "・".join(names), names
     rest = [n for n in names if n in roster]
-    parts = []
+    parts, members_all = [], list(names)
     for allow_missing in (False, True):
         for idx in (0, 1):  # 勢力 → 家 の順
             groups = {}
@@ -147,15 +148,19 @@ def summarize_generals(names: list, roster: dict) -> str:
             for (g, star), members in groups.items():
                 total = [n for n, v in roster.items() if (v[idx], v[2]) == (g, star)]
                 missing = [n for n in total if n not in members]
-                if not missing and len(members) >= 2:
-                    parts.append(f"{g}の★{star}")
-                elif allow_missing and len(members) >= 4 and len(missing) <= 2 and len(members) >= 0.7 * len(total):
-                    parts.append(f"{g}の★{star}（{'・'.join(missing)}以外）")
-                else:
+                ok = (not missing and len(members) >= 2) or (
+                    allow_missing and len(members) >= 4 and len(missing) <= 2 and len(members) >= 0.7 * len(total)
+                )
+                if not ok:
                     continue
+                # 勢力のまとまりが1つの家とまったく同じ顔ぶれなら、家の名前で表す（例: 徳川家の★5）
+                fams = {roster[n][1] for n in total}
+                label = f"{fams.pop()}の★{star}" if idx == 0 and len(fams) == 1 else f"{g}の★{star}"
+                parts.append(label)
+                members_all += [n for n in missing if n not in members_all]
                 rest = [n for n in rest if n not in members]
     parts += rest + [n for n in names if n not in roster]
-    return "・".join(parts)
+    return "・".join(parts), members_all
 
 
 # ---------------------------------------------------------------- はてなの真戦Wiki
@@ -520,7 +525,9 @@ def main():
     # 事件戦法の交換武将は、勢力・家・星のまとまりで短く表す
     roster = {tr(h["name"]): (tr(h["camp"]), tr(h["family"]), h["star"]) for h in cfg["hero"] if not h["name"].startswith("军略_")}
     for s in skills.values():
-        s["exchange"] = summarize_generals(s["teachers"], roster) if s["source"] == "事件戦法" and s["teachers"] else ""
+        s["exchange"] = ""
+        if s["source"] == "事件戦法" and s["teachers"]:
+            s["exchange"], s["teachers"] = summarize_generals(s["teachers"], roster)
 
     chosen_from = {s["name"]: s.pop("_from", "公式") for s in skills.values()}
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))
