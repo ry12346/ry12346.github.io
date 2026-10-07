@@ -251,7 +251,7 @@ def parse_kenbo_senpo(path: Path):
     """kenbo 戦法データベース: 発動率と効果（数値はLv10の値のみ）"""
     h = path.read_text(encoding="utf-8")
     out = {}
-    for row in re.findall(r"<tr data-kind=[^>]*>(.*?)</tr>", h, re.S):
+    for kind, row in re.findall(r'<tr data-kind="([^"]*)"[^>]*>(.*?)</tr>', h, re.S):
         tds = {lab: text(v) for lab, v in re.findall(r'<td data-label="([^"]*)"[^>]*>(.*?)</td>', row, re.S)}
         if not tds.get("戦法名"):
             continue
@@ -259,7 +259,8 @@ def parse_kenbo_senpo(path: Path):
         if tds.get("大将技") and tds["大将技"] not in ("-", "－"):
             desc += "\n大将技：" + tds["大将技"]
         rate = tds.get("発動率", "")
-        put(out, tds["戦法名"], {"rate": rate if re.search(r"\d", rate) else "", "desc": desc})
+        source = {"koyu": "固有戦法", "denju": "伝授戦法", "jiken": "事件戦法"}.get(kind, "")
+        put(out, tds["戦法名"], {"rate": rate if re.search(r"\d", rate) else "", "desc": desc, "source": source})
     return out
 
 
@@ -331,12 +332,14 @@ def main():
             rec["_cands"].append(("wiki", w["effect"], False))
             rec["teachers"] = w["teachers"]
             rec["officialOnly"] = False
+            if w["sourceType"] == "武将伝授":
+                rec["source"] = "伝授戦法"
         sl = slg.get(norm(name))
         if sl:
             rec["rate"] = sl["rate"]
             if sl["rate"]:
                 rec["_rateSrc"].add("SLGSIM")
-            rec["source"] = sl["source"]
+            rec["source"] = sl["source"] or rec["source"]
             rec["kana"] = sl["kana"]
             rec["officialOnly"] = False
         if norm(name) in ken_tac:
@@ -415,6 +418,8 @@ def main():
             continue
         if k["desc"]:
             s["_cands"].append(("kenbo", k["desc"], True))
+        if not s["source"] and k["source"]:
+            s["source"] = k["source"]
         if k["rate"]:
             lv10 = lambda r: (re.findall(r"(\d+(?:\.\d+)?)%", r) or [None])[-1]
             if not s["rate"]:
@@ -459,10 +464,18 @@ def main():
             s["rate"], s["rateUnsure"], rate_ok = format_value(o["発動率"], True), False, True
         if o.get("読み"):
             s["kana"], s["kanaUnsure"] = o["読み"], False
+        if o.get("入手"):
+            s["source"] = o["入手"]
+        if o.get("伝授元"):
+            t = o["伝授元"]
+            s["teachers"] = t if isinstance(t, list) else [x for x in re.split(r"[・、,，/／\s]+", t) if x]
         vals = {str(k): v for k, v in o.get("数値", {}).items() if str(v).strip()}
         s["reported"] = vals
         if s["slots"] and all(str(x["n"]) in vals for x in s["slots"]):
             s["desc"], s["descHasValues"], s["valuesNote"], s["confirmed"] = fill_template(s["_raw"], vals), True, "", True
+        # 伝授戦法なのに伝授元が取れていないもの（星3・4武将の固有戦法）は、所持武将を伝授元として表示
+        if s["source"] == "伝授戦法" and not s["teachers"] and s["owners"]:
+            s["teachers"], s["owners"] = s["owners"], []
         # 未確定の項目
         if not s["officialOnly"]:
             if s["kind"] in ("能動", "突撃") and not rate_ok and (s["rateUnsure"] or len(s["_rateSrc"]) < 2):
@@ -471,10 +484,9 @@ def main():
                 s["needsCheck"].append("数値")
             if s["kanaUnsure"]:
                 s["needsCheck"].append("読み")
+            if not s["source"] or (s["source"] == "伝授戦法" and not s["teachers"]):
+                s["needsCheck"].append("伝授元")
         del s["_raw"], s["_rateSrc"]
-        # 伝授戦法なのに伝授元が取れていないもの（星3・4武将の固有戦法）は、所持武将を伝授元として表示
-        if s["source"] == "伝授戦法" and not s["teachers"] and s["owners"]:
-            s["teachers"], s["owners"] = s["owners"], []
 
     chosen_from = {s["name"]: s.pop("_from", "公式") for s in skills.values()}
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))

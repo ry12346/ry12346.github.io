@@ -13,6 +13,9 @@
   ②：107→214
   ③：7.5→15
   読み：おによししげ
+  入手：伝授戦法
+  伝授元：〇〇・〇〇
+  備考：その他の訂正（自動では反映しない。一覧に表示する）
   報告者：〇〇
 
 ・1つのファイルに何件貼ってもよい（「戦法：」の行で区切る）
@@ -50,7 +53,7 @@ def parse(text: str):
             cur["数値"][str(CIRCLED.index(key) + 1)] = val
         elif key_n.isdigit():
             cur["数値"][key_n] = val
-        elif key in ("発動率", "読み", "報告者"):
+        elif key in ("発動率", "読み", "報告者", "入手", "伝授元", "備考"):
             cur[key] = val
     return reports
 
@@ -67,7 +70,7 @@ def main():
     tactics = data.setdefault("戦法", {})
     known = {s["name"]: s for s in json.loads(SKILLS.read_text(encoding="utf-8"))}
 
-    added, conflicts, unknown = 0, [], []
+    added, conflicts, unknown, notes = 0, [], [], []
     for r in reports:
         name = r["戦法"]
         if name not in known:
@@ -76,7 +79,11 @@ def main():
         slots = {str(x["n"]) for x in known[name]["slots"]}
         entry = tactics.setdefault(name, {})
         who = r.get("報告者", "")
-        fields = [("発動率", r.get("発動率"))] + [(f"数値{n}", v) for n, v in r["数値"].items()] + [("読み", r.get("読み"))]
+        fields = [("発動率", r.get("発動率"))] + [(f"数値{n}", v) for n, v in r["数値"].items()]
+        fields += [("読み", r.get("読み")), ("入手", r.get("入手")), ("伝授元", r.get("伝授元"))]
+        if r.get("備考"):
+            notes.append(f"{name}：{r['備考']}（{who}）")
+            entry.setdefault("備考", []).append(r["備考"] + (f"（{who}）" if who else ""))
         for field, val in fields:
             if not val:
                 continue
@@ -106,6 +113,10 @@ def main():
         print("値の食い違い（" + ("上書きしました" if overwrite else "登録済みの値を残しました。報告を採るなら --overwrite") + "）:")
         for c in conflicts:
             print("  " + c)
+    if notes:
+        print("備考（自動では反映しません。内容を見て手で直してください）:")
+        for n in notes:
+            print("  " + n)
     print("続けて python scripts/build_data.py を実行してください。")
 
 
