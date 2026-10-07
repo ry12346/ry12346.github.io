@@ -28,6 +28,8 @@ NAME_FIXES = {
     "临时枪之铃": "臨時槍之鈴",
     "士气高扬": "士気高揚",
     "速战": "速戦",
+    # multi_lang の訳は「斬り」だが、ゲーム内の名称は「薙ぎ払い」（効果文が一致）
+    "挥砍": "薙ぎ払い",
 }
 
 
@@ -327,7 +329,8 @@ def main():
                 skills[sid]["source"] = "固有戦法"
             if key in hz_gen or key in ken_gen or key in slg_gen:  # 外部ソースに載っている武将の固有戦法なら実装済み
                 skills[sid]["officialOnly"] = False
-        heroes.append(rec)
+        if rec["star"] >= 4 and rec["cost"] > 2:  # 星1〜3・コスト2の武将は一覧に載せない
+            heroes.append(rec)
 
     # Wikiで数値入りの効果文が取れなかった戦法は SLGSIM の詳細ページ → kenbo（Lv10の値のみ）の順で補う
     by_name = {norm(s["name"]): s for s in skills.values()}
@@ -354,6 +357,9 @@ def main():
         if key in kana_fix:
             s["kana"] = kana_fix[key]
         s["kanaUnsure"] = key in kana_unsure
+        # 伝授戦法なのに伝授元が取れていないもの（星3・4武将の固有戦法）は、所持武将を伝授元として表示
+        if s["source"] == "伝授戦法" and not s["teachers"] and s["owners"]:
+            s["teachers"], s["owners"] = s["owners"], []
 
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))
 

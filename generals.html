@@ -84,8 +84,8 @@ const COLS = [
 ];
 
 const factionF = chipGroup($("#f-faction"), FACTIONS, render);
-const starF = chipGroup($("#f-star"), [5, 4, 3, 2, 1], render, { label: (v) => "★" + v });
-const costF = chipGroup($("#f-cost"), [7, 6, 5, 4, 3, 2], render);
+const starF = chipGroup($("#f-star"), [5, 4], render, { label: (v) => "★" + v });
+const costF = chipGroup($("#f-cost"), [7, 6, 5, 4, 3], render);
 $("#q").addEventListener("input", render);
 
 $("#mode").addEventListener("click", (e) => {
