@@ -236,7 +236,7 @@ def main():
     skills = {}
     by_cn = {}
     for s in cfg["skill"]:
-        if s["skill_kind"] not in MAIN_KINDS:
+        if s["skill_kind"] not in MAIN_KINDS or s["grade"] < 3:  # C・D戦法は収録しない
             continue
         name = tr(s["name"])
         rec = {
