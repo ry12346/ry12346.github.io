@@ -91,12 +91,14 @@ function card(s) {
     </div>
     <div class="tags" style="justify-content:flex-start;margin:0">
       ${s.officialOnly ? '<span class="tag unofficial" title="公式の設定データにはあるが、攻略サイトに掲載が無い">公式データのみ</span>' : `<span class="tag src">${esc(s.source)}</span>`}
+      ${s.confirmed ? '<span class="tag ok" title="一門メンバーがゲーム内で確認した数値">確認済み</span>' : ""}
       ${s.effectTypes.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
       ${s.target ? `<span class="tag">${esc(s.target)}</span>` : ""}
     </div>
     <div class="tdesc" data-full="${long ? 0 : 1}">${esc(long ? s.desc.slice(0, 150) + "…" : s.desc)}</div>
     ${long ? `<button class="more" type="button" data-id="${s.id}">続きを読む</button>` : ""}
     ${s.descHasValues ? (s.valuesNote ? `<span class="small muted">※ ${esc(s.valuesNote)}</span>` : "") : `<span class="small muted">※ ○はレベルで変わる数値（未収録）</span>`}
+    ${s.needsCheck.length ? `<a class="more" href="report.html?t=${encodeURIComponent(s.name)}">未確認：${esc(s.needsCheck.join("・"))} → ゲーム内の値を報告する</a>` : ""}
     <div class="tmeta">
       <span class="troops">${TROOPS.map((t) => `<i class="${s.troops.includes(t) ? "on" : ""}">${t}</i>`).join("")}</span>
       ${people}${teach}

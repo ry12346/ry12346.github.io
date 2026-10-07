@@ -4,6 +4,7 @@ const NAV = [
   ["generals.html", "武将一覧"],
   ["tactics.html", "戦法一覧"],
   ["exp.html", "経験値・資料"],
+  ["report.html", "情報提供"],
 ];
 
 export const TOOLS = [

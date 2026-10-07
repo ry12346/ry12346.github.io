@@ -102,6 +102,33 @@ def official_tips(s: str) -> str:
     return s.strip()
 
 
+CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩"
+
+
+def tips_template(s: str):
+    """公式説明文の数値欄 {1%} などを ①② に置き換えた報告用テンプレートと、欄の一覧 [(番号, %付きか)]"""
+    s = re.sub(r"<font[^>]*>(.*?)</font>", r"\1", s).strip()
+    slots = {}
+    for n, pct in re.findall(r"\{(\d+)(%?)\}", s):
+        slots.setdefault(int(n), bool(pct))
+    tmpl = re.sub(r"\{(\d+)(%?)\}", lambda m: CIRCLED[int(m.group(1)) - 1] + m.group(2), s)
+    return tmpl, sorted(slots.items())
+
+
+def format_value(v: str, pct: bool) -> str:
+    """報告された値の表記をそろえる: 全角→半角、-> ～ を → に、%欄なら各数値に % を付ける"""
+    v = unicodedata.normalize("NFKC", str(v)).strip()
+    v = re.sub(r"\s*(->|→|~|～|〜|=>)\s*", "→", v)
+    if pct:
+        v = re.sub(r"(\d+(?:\.\d+)?)%?", r"\1%", v)
+    return v
+
+
+def fill_template(raw: str, values: dict) -> str:
+    raw = re.sub(r"<font[^>]*>(.*?)</font>", r"\1", raw).strip()
+    return re.sub(r"\{(\d+)(%?)\}", lambda m: format_value(values[m.group(1)], bool(m.group(2))), raw)
+
+
 # ---------------------------------------------------------------- はてなの真戦Wiki
 def parse_hz_general(path: Path):
     h = path.read_text(encoding="utf-8")
@@ -260,7 +287,8 @@ def main():
     kana_unsure = {norm(k) for k in kana_file.get("要確認", [])}
     hero_kana = {norm(k): v for k, v in kana_file.get("武将の読み", {}).items()}
     overrides = json.loads((OUT / "overrides.json").read_text(encoding="utf-8")) if (OUT / "overrides.json").exists() else {}
-    rate_fix = {norm(k): v for k, v in overrides.get("発動率", {}).items()}
+    # 一門メンバーの報告（scripts/import_reports.py で取り込む）: {戦法名: {発動率, 数値: {番号: 値}, 読み}}
+    tactic_ov = {norm(k): v for k, v in overrides.get("戦法", {}).items()}
 
     # ---- 戦法
     skills = {}
@@ -281,6 +309,13 @@ def main():
             "target": tr(s["target_tips"]),
             "summary": tr(s["short_tips"]),
             "desc": official_tips(tr(s["tips"])),
+            "template": tips_template(tr(s["tips"]))[0],
+            "slots": [{"n": n, "pct": pct} for n, pct in tips_template(tr(s["tips"]))[1]],
+            "_raw": tr(s["tips"]),
+            "_rateSrc": set(),
+            "confirmed": False,
+            "reported": {},
+            "needsCheck": [],
             "descHasValues": False,
             "valuesNote": "",
             "rate": "",
@@ -299,6 +334,8 @@ def main():
         sl = slg.get(norm(name))
         if sl:
             rec["rate"] = sl["rate"]
+            if sl["rate"]:
+                rec["_rateSrc"].add("SLGSIM")
             rec["source"] = sl["source"]
             rec["kana"] = sl["kana"]
             rec["officialOnly"] = False
@@ -345,6 +382,7 @@ def main():
                 r = re.search(r"発動確率\s*(\d+%(?:→\d+%)?)", w["uniqueEffect"])
                 if r:
                     skills[sid]["rate"] = r.group(1)
+                    skills[sid]["_rateSrc"].add("Wiki")
         if not rec["stats"]:
             # Lv1・成長値はどこにも無いので Lv50 の値だけ持つ（kenbo を優先。SLGSIM は Wiki と1割ほど食い違うため）
             rec["lv50"] = (ken_gen.get(key) or {}).get("lv50") or (slg_gen.get(key) or {}).get("lv50")
@@ -381,7 +419,10 @@ def main():
             lv10 = lambda r: (re.findall(r"(\d+(?:\.\d+)?)%", r) or [None])[-1]
             if not s["rate"]:
                 s["rate"] = k["rate"]
-            elif lv10(s["rate"]) != lv10(k["rate"]):
+                s["_rateSrc"].add("kenbo")
+            elif lv10(s["rate"]) == lv10(k["rate"]):
+                s["_rateSrc"].add("kenbo")
+            else:
                 # SLGSIM と kenbo で食い違う: kenbo の方が公式の効果文とよく一致するので kenbo を採り、要確認にする
                 s["rate"], s["rateUnsure"] = k["rate"], True
 
@@ -406,13 +447,31 @@ def main():
     for s in skills.values():
         if s["kind"] in ("指揮", "受動", "兵種", "陣法"):  # 戦闘中常に発動する種別
             s["rate"], s["rateUnsure"] = "100%", False
-        if norm(s["name"]) in rate_fix:  # ゲーム内で確認した値（data/overrides.json）
-            s["rate"], s["rateUnsure"] = rate_fix[norm(s["name"])], False
         # 読みがな: 手入力の data/kana.json を最優先
         key = norm(s["name"])
         if key in kana_fix:
             s["kana"] = kana_fix[key]
         s["kanaUnsure"] = key in kana_unsure
+        # 一門メンバーの報告（ゲーム内で確認した値）は自動取得より優先
+        o = tactic_ov.get(key, {})
+        rate_ok = False
+        if o.get("発動率"):
+            s["rate"], s["rateUnsure"], rate_ok = format_value(o["発動率"], True), False, True
+        if o.get("読み"):
+            s["kana"], s["kanaUnsure"] = o["読み"], False
+        vals = {str(k): v for k, v in o.get("数値", {}).items() if str(v).strip()}
+        s["reported"] = vals
+        if s["slots"] and all(str(x["n"]) in vals for x in s["slots"]):
+            s["desc"], s["descHasValues"], s["valuesNote"], s["confirmed"] = fill_template(s["_raw"], vals), True, "", True
+        # 未確定の項目
+        if not s["officialOnly"]:
+            if s["kind"] in ("能動", "突撃") and not rate_ok and (s["rateUnsure"] or len(s["_rateSrc"]) < 2):
+                s["needsCheck"].append("発動率")
+            if s["slots"] and not s["confirmed"] and (not s["descHasValues"] or s["valuesNote"]):
+                s["needsCheck"].append("数値")
+            if s["kanaUnsure"]:
+                s["needsCheck"].append("読み")
+        del s["_raw"], s["_rateSrc"]
         # 伝授戦法なのに伝授元が取れていないもの（星3・4武将の固有戦法）は、所持武将を伝授元として表示
         if s["source"] == "伝授戦法" and not s["teachers"] and s["owners"]:
             s["teachers"], s["owners"] = s["owners"], []
