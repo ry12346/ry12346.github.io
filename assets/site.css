@@ -147,7 +147,16 @@ table.mini thead th{font-size:11px;color:var(--muted);font-weight:700}
 .calc-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
 .calc select,.calc input[type=number]{border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:#fff;width:auto}
 .calc input[type=number]{width:90px}
-.result{background:var(--gold-soft);border-radius:14px;padding:14px 16px}
+.result{background:var(--gold-soft);border-radius:14px;padding:14px 16px;margin-top:12px}
+.calc-table td{vertical-align:middle;cursor:default}
+.calc-table tbody tr:hover td{background:#fff}
+.calc-table input[type=number]{width:64px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;text-align:right;background:#fff}
+.calc-table select{border:1px solid var(--line);border-radius:8px;padding:3px 6px;background:#fff}
+.calc-table tfoot td{background:#f3f1ec;border-top:1px solid var(--line)}
+.calc-table .grade{width:26px;height:26px;font-size:12px}
+.calc-opts{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px}
+.calc-opts #shop{display:flex;flex-wrap:wrap;gap:6px 18px}
+.calc-opts .toggle{font-size:13px;color:var(--ink)}
 .result .big{font-size:28px;font-weight:900;color:var(--navy)}
 .result ul{margin:6px 0 0;padding-left:18px;font-size:13px}
 
