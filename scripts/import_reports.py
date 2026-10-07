@@ -14,7 +14,7 @@
   ③：7.5→15
   読み：おによししげ
   入手：伝授戦法
-  伝授元：〇〇・〇〇
+  伝授元：〇〇・〇〇        （事件戦法は「交換：〇〇・〇〇」）
   備考：その他の訂正（自動では反映しない。一覧に表示する）
   報告者：〇〇
 
@@ -53,8 +53,8 @@ def parse(text: str):
             cur["数値"][str(CIRCLED.index(key) + 1)] = val
         elif key_n.isdigit():
             cur["数値"][key_n] = val
-        elif key in ("発動率", "読み", "報告者", "入手", "伝授元", "備考"):
-            cur[key] = val
+        elif key in ("発動率", "読み", "報告者", "入手", "伝授元", "交換", "備考"):
+            cur["伝授元" if key == "交換" else key] = val
     return reports
 
 

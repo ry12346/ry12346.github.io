@@ -78,7 +78,7 @@ $("#sort").addEventListener("click", (e) => {
 function card(s) {
   const long = s.desc.length > 150;
   const people = s.owners.length ? `<span>固有：<b>${esc(s.owners.join("・"))}</b></span>` : "";
-  const teach = s.teachers.length ? `<span>伝授元：<b>${esc(s.teachers.join("・"))}</b></span>` : "";
+  const teach = s.teachers.length ? `<span>${s.source === "事件戦法" ? "交換" : "伝授元"}：<b>${esc(s.teachers.join("・"))}</b></span>` : "";
   return `
   <article class="tcard">
     <div class="tcard-head">

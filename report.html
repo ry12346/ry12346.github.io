@@ -45,7 +45,7 @@
           <select id="source" class="rp-select">
             <option value="">（変更なし）</option><option>固有戦法</option><option>伝授戦法</option><option>事件戦法</option>
           </select></label>
-        <label class="rp-row"><span>伝授元</span><input id="teachers" placeholder="伝授できる武将（複数は「・」区切り）" autocomplete="off"></label>
+        <label class="rp-row"><span id="teachers-label">伝授元</span><input id="teachers" placeholder="伝授できる武将（複数は「・」区切り）" autocomplete="off"></label>
         <label class="rp-row"><span>備考</span><input id="note" placeholder="効果タイプの違いなど、その他の訂正（任意）" autocomplete="off"></label>
         <label class="rp-row"><span>報告者</span><input id="who" placeholder="名前（任意）" autocomplete="off"></label>
         <details class="rp-current">
@@ -76,7 +76,7 @@
 ③：7.5→15
 読み：おによししげ
 入手：伝授戦法
-伝授元：〇〇・〇〇
+伝授元：〇〇・〇〇（事件戦法は「交換：〇〇・〇〇」）
 備考：（その他の訂正があれば）
 報告者：〇〇</pre>
   </section>
@@ -86,7 +86,14 @@
 import { $, esc, fold, loadJSON } from "./assets/site.js";
 
 const CIRCLED = "①②③④⑤⑥⑦⑧⑨⑩";
-const REASON = { 発動率: "発動確率が未確認", 数値: "Lv1→Lv10の数値が未確認", 伝授元: "入手方法・伝授元が未確認", 読み: "読みが未確認" };
+const REASON = { 発動率: "発動確率が未確認", 数値: "Lv1→Lv10の数値が未確認", 伝授元: "入手方法・伝授元（交換武将）が未確認", 読み: "読みが未確認" };
+// 事件戦法は伝授ではなく交換で入手するので、欄名と報告文の項目名を「交換」にする
+const isEvent = () => ($("#source").value || cur?.source) === "事件戦法";
+function updateTeacherLabel() {
+  const ev = isEvent();
+  $("#teachers-label").textContent = ev ? "交換武将" : "伝授元";
+  $("#teachers").placeholder = ev ? "交換に使う武将（複数は「・」区切り）" : "伝授できる武将（複数は「・」区切り）";
+}
 const skills = await loadJSON("skills.json");
 const byName = new Map(skills.map((s) => [s.name, s]));
 
@@ -136,9 +143,10 @@ function select() {
   $("#source").value = "";
   $("#teachers").value = "";
   $("#note").value = "";
+  updateTeacherLabel();
   $("#current").innerHTML = `
     <p class="small" style="margin:6px 0">発動確率：${esc(s.rate || "不明")}${s.rateUnsure ? "?" : ""}／読み：${esc(s.kana || "不明")}${s.kanaUnsure ? "?" : ""}<br>
-      入手：${esc(s.source || "不明")}／${s.teachers.length ? `伝授元：${esc(s.teachers.join("・"))}` : s.owners.length ? `固有：${esc(s.owners.join("・"))}` : "伝授元：不明"}<br>
+      入手：${esc(s.source || "不明")}／${s.source === "事件戦法" ? `交換：${esc(s.teachers.join("・") || "不明")}` : s.teachers.length ? `伝授元：${esc(s.teachers.join("・"))}` : s.owners.length ? `固有：${esc(s.owners.join("・"))}` : "伝授元：不明"}<br>
       効果タイプ：${esc(s.effectTypes.join("・"))}／対象：${esc(s.target)}／兵種：${esc(s.troops.join("・"))}</p>
     <div class="tdesc">${esc(s.desc)}</div>
     ${s.valuesNote ? `<p class="small muted">※ ${esc(s.valuesNote)}</p>` : ""}`;
@@ -159,7 +167,7 @@ function render() {
   }
   if ($("#kana").value.trim()) lines.push(`読み：${$("#kana").value.trim()}`);
   if ($("#source").value) lines.push(`入手：${$("#source").value}`);
-  if ($("#teachers").value.trim()) lines.push(`伝授元：${$("#teachers").value.trim()}`);
+  if ($("#teachers").value.trim()) lines.push(`${isEvent() ? "交換" : "伝授元"}：${$("#teachers").value.trim()}`);
   if ($("#note").value.trim()) lines.push(`備考：${$("#note").value.trim()}`);
   if ($("#who").value.trim()) lines.push(`報告者：${$("#who").value.trim()}`);
   $("#out").value = lines.join("\n");
@@ -167,7 +175,7 @@ function render() {
 }
 
 $("#tactic").addEventListener("input", select);
-$("#detail").addEventListener("change", render);
+$("#detail").addEventListener("change", () => { updateTeacherLabel(); render(); });
 $("#detail").addEventListener("input", (e) => {
   if (e.target.id === "who") try { localStorage.setItem("report-who", e.target.value); } catch {}
   render();

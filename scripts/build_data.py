@@ -330,10 +330,10 @@ def main():
         w = hz_tac.get(norm(name))
         if w:
             rec["_cands"].append(("wiki", w["effect"], False))
-            rec["teachers"] = w["teachers"]
+            rec["teachers"] = list(dict.fromkeys(w["teachers"]))  # 伝授元（事件戦法なら交換に使う武将）
             rec["officialOnly"] = False
-            if w["sourceType"] == "武将伝授":
-                rec["source"] = "伝授戦法"
+            if w["sourceType"] in ("武将伝授", "事件戦法"):
+                rec["source"] = {"武将伝授": "伝授戦法", "事件戦法": "事件戦法"}[w["sourceType"]]
         sl = slg.get(norm(name))
         if sl:
             rec["rate"] = sl["rate"]
@@ -466,8 +466,8 @@ def main():
             s["kana"], s["kanaUnsure"] = o["読み"], False
         if o.get("入手"):
             s["source"] = o["入手"]
-        if o.get("伝授元"):
-            t = o["伝授元"]
+        if o.get("伝授元") or o.get("交換"):
+            t = o.get("伝授元") or o.get("交換")
             s["teachers"] = t if isinstance(t, list) else [x for x in re.split(r"[・、,，/／\s]+", t) if x]
         vals = {str(k): v for k, v in o.get("数値", {}).items() if str(v).strip()}
         s["reported"] = vals
@@ -484,7 +484,7 @@ def main():
                 s["needsCheck"].append("数値")
             if s["kanaUnsure"]:
                 s["needsCheck"].append("読み")
-            if not s["source"] or (s["source"] == "伝授戦法" and not s["teachers"]):
+            if not s["source"] or (s["source"] in ("伝授戦法", "事件戦法") and not s["teachers"]):
                 s["needsCheck"].append("伝授元")
         del s["_raw"], s["_rateSrc"]
 
