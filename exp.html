@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f3443">
+<title>経験値・資料 | 真戦データ帳</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231f3443%27/%3E%3Ctext x=%2732%27 y=%2745%27 font-size=%2736%27 text-anchor=%27middle%27 fill=%27%23f2d9a8%27 font-weight=%27900%27%3E%E7%9C%9F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="page-head">
+    <div class="eyebrow">REFERENCE</div>
+    <h1>経験値・資料</h1>
+    <p>戦法レベルアップの必要経験値と、武将心得から何枚分になるかの計算。<span class="badge-warn">要検証</span> の付いた値はゲーム内で未確認です。</p>
+  </div>
+
+  <div class="grid2">
+    <section class="card">
+      <h2 style="margin:0 0 10px;font-size:18px">戦法経験値計算</h2>
+      <div class="calc">
+        <div class="calc-row">
+          品質 <select id="grade"></select>
+          Lv <select id="from"></select> → <select id="to"></select>
+        </div>
+        <div class="calc-row">
+          <label><input type="checkbox" id="koban"> 小判で2倍にする</label>
+        </div>
+        <div class="result" id="result"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 style="margin:0 0 10px;font-size:18px">必要経験値表 <span id="exp-badge"></span></h2>
+      <table class="mini" id="exp-table">
+        <thead><tr><th>レベル</th><th>必要経験値</th><th>累計（Lv1から）</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="note" id="exp-note"></p>
+    </section>
+  </div>
+
+  <h2 class="section-title">その他の資料</h2>
+  <div class="grid2" id="others"></div>
+</main>
+
+<script type="module">
+import { $, esc, loadJSON } from "./assets/site.js";
+
+const ref = await loadJSON("reference.json");
+const grades = Object.keys(ref.tacticExp).filter((g) => ref.tacticExp[g].toNext.length);
+const badge = (v) => (v ? "" : ' <span class="badge-warn">要検証</span>');
+
+$("#grade").innerHTML = grades.map((g) => `<option>${g}</option>`).join("");
+const lvOptions = (sel, from, to, value) => {
+  sel.innerHTML = Array.from({ length: to - from + 1 }, (_, i) => from + i).map((n) => `<option ${n === value ? "selected" : ""}>${n}</option>`).join("");
+};
+
+function table() {
+  const g = ref.tacticExp[$("#grade").value];
+  let sum = 0;
+  $("#exp-table tbody").innerHTML = g.toNext.map((n, i) => {
+    sum += n;
+    return `<tr><td>Lv${i + 1} → ${i + 2}</td><td>${n.toLocaleString()}</td><td>${sum.toLocaleString()}</td></tr>`;
+  }).join("");
+  $("#exp-badge").innerHTML = badge(g.verified);
+  $("#exp-note").textContent = g.note;
+}
+
+function calc() {
+  const g = ref.tacticExp[$("#grade").value];
+  const from = +$("#from").value, to = +$("#to").value;
+  const need = g.toNext.slice(from - 1, Math.max(from - 1, to - 1)).reduce((a, b) => a + b, 0);
+  const mul = $("#koban").checked ? 2 : 1;
+  const per = ref.kokoroe.expPerCard;
+  $("#result").innerHTML = `
+    <div class="small muted">Lv${from} → Lv${to} に必要な戦法経験</div>
+    <div class="big">${need.toLocaleString()}</div>
+    <ul>${Object.entries(per).map(([k, v]) => `<li>${esc(k)}の武将心得なら <b>${Math.ceil(need / (v * mul)).toLocaleString()}</b> 枚（1枚 ${v * mul}）</li>`).join("")}</ul>
+    ${badge(g.verified && ref.kokoroe.verified)}`;
+}
+
+function resetLv() {
+  const max = ref.tacticExp[$("#grade").value].toNext.length + 1;
+  lvOptions($("#from"), 1, max, 1);
+  lvOptions($("#to"), 1, max, max);
+}
+
+$("#grade").addEventListener("change", () => { resetLv(); table(); calc(); });
+for (const id of ["#from", "#to", "#koban"]) $(id).addEventListener("change", calc);
+resetLv(); table(); calc();
+
+const k = ref.kokoroe, c = ref.itemCooldown;
+$("#others").innerHTML = `
+  <section class="card">
+    <h2 style="margin:0 0 6px;font-size:16px">武将心得${badge(k.verified)}</h2>
+    <p class="small muted" style="margin:0 0 8px">${esc(k.note)}</p>
+    <table class="mini"><tbody>
+      ${Object.entries(k.expPerCard).map(([a, b]) => `<tr><td>${esc(a)} 1枚の戦法経験</td><td>${b}</td></tr>`).join("")}
+      ${Object.entries(k.maxStack).map(([a, b]) => `<tr><td>所持上限：${esc(a)}</td><td>${b}</td></tr>`).join("")}
+    </tbody></table>
+  </section>
+  <section class="card">
+    <h2 style="margin:0 0 6px;font-size:16px">盟約の品 待機時間${badge(c.verified)}</h2>
+    <p class="small muted" style="margin:0 0 8px">${esc(c.note)}</p>
+    <table class="mini"><tbody>${c.rows.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</tbody></table>
+  </section>`;
+</script>
+</body>
+</html>

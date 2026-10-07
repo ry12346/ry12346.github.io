@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f3443">
+<title>真戦データ帳</title>
+<meta name="description" content="信長の野望 真戦の武将・戦法データと、攻略ツールへのリンクをまとめた総合ページ。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231f3443%27/%3E%3Ctext x=%2732%27 y=%2745%27 font-size=%2736%27 text-anchor=%27middle%27 fill=%27%23f2d9a8%27 font-weight=%27900%27%3E%E7%9C%9F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<main class="wrap">
+  <section class="hero">
+    <div class="eyebrow">NOBUNAGA SHINSEN DATABOOK</div>
+    <h1>真戦データ帳</h1>
+    <p>武将のステータス・成長値、戦法の効果・発動確率、経験値などの資料と、これまで作ったツールをひとまとめにしたページです。</p>
+    <div class="hero-stats" id="hero-stats"></div>
+  </section>
+
+  <h2 class="section-title">データ</h2>
+  <div class="tiles">
+    <a class="tile" href="generals.html">
+      <span class="tile-icon">将</span>
+      <strong>武将一覧</strong>
+      <span>Lv1の武勇・知略・統率・速度と成長値、勢力、コスト。任意レベルの値に切り替えて並べ替え</span>
+    </a>
+    <a class="tile" href="tactics.html">
+      <span class="tile-icon">戦</span>
+      <strong>戦法一覧</strong>
+      <span>種別・品質・発動確率・効果。固有／伝授／事件、兵種制限、効果タイプで絞り込み</span>
+    </a>
+    <a class="tile" href="exp.html">
+      <span class="tile-icon">経</span>
+      <strong>経験値・資料</strong>
+      <span>戦法レベルアップの必要経験値と、武将心得からの換算計算</span>
+    </a>
+  </div>
+
+  <h2 class="section-title">ツール</h2>
+  <div class="tiles" id="tools"></div>
+</main>
+
+<script type="module">
+import { TOOLS, esc, loadJSON } from "./assets/site.js";
+
+document.getElementById("tools").innerHTML = TOOLS.map((t) => `
+  <a class="tile ext" href="${t.url}" target="_blank" rel="noopener">
+    <span class="tile-icon">${esc(t.icon)}</span>
+    <strong>${esc(t.title)}</strong>
+    <span>${esc(t.desc)}</span>
+  </a>`).join("");
+
+loadJSON("meta.json").then((m) => {
+  document.getElementById("hero-stats").innerHTML = [
+    `武将 ${m.heroCount}名`,
+    `戦法 ${m.skillCount}種`,
+    `データ更新 ${m.generatedAt}`,
+  ].map((s) => `<span>${esc(s)}</span>`).join("");
+}).catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f3443">
+<title>戦法一覧 | 真戦データ帳</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231f3443%27/%3E%3Ctext x=%2732%27 y=%2745%27 font-size=%2736%27 text-anchor=%27middle%27 fill=%27%23f2d9a8%27 font-weight=%27900%27%3E%E7%9C%9F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="page-head">
+    <div class="eyebrow">TACTICS</div>
+    <h1>戦法一覧</h1>
+    <p>効果内の「A→B」はLv1→Lv10の値です。兵種で絞り込むと、その兵種で装備できる戦法だけを表示します。</p>
+  </div>
+
+  <div class="card filters">
+    <div class="frow"><input class="search" id="q" type="search" placeholder="戦法名・よみ・効果・武将名で検索" autocomplete="off"></div>
+    <div class="frow" id="f-kind"><label>種別</label></div>
+    <div class="frow" id="f-grade"><label>品質</label></div>
+    <div class="frow" id="f-src"><label>入手</label></div>
+    <div class="frow" id="f-type"><label>効果</label></div>
+    <div class="frow" id="f-troop"><label>兵種</label></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg" id="sort">
+      <button type="button" data-s="grade" aria-pressed="true">品質順</button>
+      <button type="button" data-s="rate" aria-pressed="false">発動確率順</button>
+      <button type="button" data-s="name" aria-pressed="false">名前順</button>
+    </div>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="tlist" id="list"></div>
+</main>
+
+<script type="module">
+import { $, esc, fold, loadJSON, chipGroup } from "./assets/site.js";
+
+const TROOPS = ["騎兵", "弓兵", "鉄砲", "足軽", "兵器"];
+const KINDS = ["能動", "突撃", "受動", "指揮", "兵種", "陣法"];
+const GRADES = ["S", "A", "B", "C", "D"];
+const skills = await loadJSON("skills.json");
+
+const uniq = (arr) => [...new Set(arr)];
+const order = (list, pref) => list.sort((a, b) => (pref.indexOf(a) + 1 || 99) - (pref.indexOf(b) + 1 || 99) || a.localeCompare(b, "ja"));
+const rateNum = (s) => {
+  const m = String(s.rate).match(/(\d+(?:\.\d+)?)%\s*$/);
+  return m ? +m[1] : -1;
+};
+for (const s of skills) {
+  s._q = fold([s.name, s.kana, s.desc, s.summary, ...s.owners, ...s.teachers].join(" "));
+  s.source ||= "その他";
+}
+
+let sort = "grade";
+const kindF = chipGroup($("#f-kind"), order(uniq(skills.map((s) => s.kind)), KINDS), render);
+const gradeF = chipGroup($("#f-grade"), order(uniq(skills.map((s) => s.grade)), GRADES), render);
+const srcF = chipGroup($("#f-src"), order(uniq(skills.map((s) => s.source)), ["固有戦法", "伝授戦法", "事件戦法"]), render);
+const typeF = chipGroup($("#f-type"), order(uniq(skills.flatMap((s) => s.effectTypes)), []), render);
+const troopF = chipGroup($("#f-troop"), TROOPS, render);
+$("#q").addEventListener("input", render);
+$("#sort").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  sort = b.dataset.s;
+  for (const x of $("#sort").children) x.setAttribute("aria-pressed", x === b);
+  render();
+});
+
+function card(s) {
+  const long = s.desc.length > 150;
+  const people = s.owners.length ? `<span>固有：<b>${esc(s.owners.join("・"))}</b></span>` : "";
+  const teach = s.teachers.length ? `<span>伝授元：<b>${esc(s.teachers.join("・"))}</b></span>` : "";
+  return `
+  <article class="tcard">
+    <div class="tcard-head">
+      <span class="grade" data-g="${esc(s.grade)}">${esc(s.grade)}</span>
+      <h3>${s.kana ? `<small>${esc(s.kana)}</small>` : ""}${esc(s.name)}</h3>
+      <div class="tags">
+        <span class="tag kind">${esc(s.kind)}</span>
+        ${s.rate ? `<span class="tag rate">${esc(s.rate)}</span>` : ""}
+      </div>
+    </div>
+    <div class="tags" style="justify-content:flex-start;margin:0">
+      <span class="tag src">${esc(s.source)}</span>
+      ${s.effectTypes.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
+      ${s.target ? `<span class="tag">${esc(s.target)}</span>` : ""}
+    </div>
+    <div class="tdesc" data-full="${long ? 0 : 1}">${esc(long ? s.desc.slice(0, 150) + "…" : s.desc)}</div>
+    ${long ? `<button class="more" type="button" data-id="${s.id}">続きを読む</button>` : ""}
+    ${s.descHasValues ? "" : `<span class="small muted">※ ○はレベルで変わる数値（未収録）</span>`}
+    <div class="tmeta">
+      <span class="troops">${TROOPS.map((t) => `<i class="${s.troops.includes(t) ? "on" : ""}">${t}</i>`).join("")}</span>
+      ${people}${teach}
+    </div>
+  </article>`;
+}
+
+function render() {
+  const q = fold($("#q").value);
+  const rows = skills.filter((s) =>
+    kindF.test(s.kind) && gradeF.test(s.grade) && srcF.test(s.source) && typeF.test(s.effectTypes) && troopF.test(s.troops) && (!q || s._q.includes(q)));
+  if (sort === "rate") rows.sort((a, b) => rateNum(b) - rateNum(a) || GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade));
+  else if (sort === "name") rows.sort((a, b) => (a.kana || a.name).localeCompare(b.kana || b.name, "ja"));
+  else rows.sort((a, b) => GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade) || KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.id - b.id);
+  $("#count").textContent = `${rows.length} / ${skills.length} 種`;
+  $("#list").innerHTML = rows.length ? rows.map(card).join("") : `<div class="empty card">該当する戦法がありません</div>`;
+}
+
+$("#list").addEventListener("click", (e) => {
+  const b = e.target.closest(".more");
+  if (!b) return;
+  const s = skills.find((x) => x.id === +b.dataset.id);
+  b.previousElementSibling.textContent = s.desc;
+  b.remove();
+});
+
+render();
+</script>
+</body>
+</html>
