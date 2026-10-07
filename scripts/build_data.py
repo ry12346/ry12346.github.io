@@ -259,6 +259,8 @@ def main():
     kana_fix = {norm(k): v for k, v in kana_file.get("読み", {}).items()}
     kana_unsure = {norm(k) for k in kana_file.get("要確認", [])}
     hero_kana = {norm(k): v for k, v in kana_file.get("武将の読み", {}).items()}
+    overrides = json.loads((OUT / "overrides.json").read_text(encoding="utf-8")) if (OUT / "overrides.json").exists() else {}
+    rate_fix = {norm(k): v for k, v in overrides.get("発動率", {}).items()}
 
     # ---- 戦法
     skills = {}
@@ -404,6 +406,8 @@ def main():
     for s in skills.values():
         if s["kind"] in ("指揮", "受動", "兵種", "陣法"):  # 戦闘中常に発動する種別
             s["rate"], s["rateUnsure"] = "100%", False
+        if norm(s["name"]) in rate_fix:  # ゲーム内で確認した値（data/overrides.json）
+            s["rate"], s["rateUnsure"] = rate_fix[norm(s["name"])], False
         # 読みがな: 手入力の data/kana.json を最優先
         key = norm(s["name"])
         if key in kana_fix:
