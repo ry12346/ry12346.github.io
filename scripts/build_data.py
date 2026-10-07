@@ -325,7 +325,7 @@ def main():
             skills[sid]["owners"].append(name)
             if not skills[sid]["source"]:
                 skills[sid]["source"] = "固有戦法"
-            if rec["stats"] or rec["lv50"]:  # 外部ソースに載っている武将の固有戦法なら実装済み
+            if key in hz_gen or key in ken_gen or key in slg_gen:  # 外部ソースに載っている武将の固有戦法なら実装済み
                 skills[sid]["officialOnly"] = False
         heroes.append(rec)
 
