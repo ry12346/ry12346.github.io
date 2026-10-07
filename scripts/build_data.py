@@ -33,6 +33,8 @@ NAME_FIXES = {
     "速战": "速戦",
     # multi_lang の訳は「斬り」だが、ゲーム内の名称は「薙ぎ払い」（効果文が一致）
     "挥砍": "薙ぎ払い",
+    # multi_lang の訳は「三河武士隊」だが、ゲーム内の戦法名は「三河武士」
+    "三河武士队": "三河武士",
 }
 
 
@@ -47,7 +49,7 @@ def text(s: str) -> str:
 ALIASES = {
     "出奇制勝": "奇策制勝",
     "薩摩鉄砲隊": "薩摩鉄砲兵",
-    "三河武士": "三河武士隊",
+    "三河武士隊": "三河武士",
     "網紀粛正": "綱紀粛正",
     "弾嵐雨霞": "弾嵐雨霰",
     "雷神切り": "雷神斬り",
@@ -127,6 +129,33 @@ def format_value(v: str, pct: bool) -> str:
 def fill_template(raw: str, values: dict) -> str:
     raw = re.sub(r"<font[^>]*>(.*?)</font>", r"\1", raw).strip()
     return re.sub(r"\{(\d+)(%?)\}", lambda m: format_value(values[m.group(1)], bool(m.group(2))), raw)
+
+
+def summarize_generals(names: list, roster: dict) -> str:
+    """交換に使う武将の一覧を「群雄の★4」「武田家の★5」のようなまとまりで短く表す。
+    roster = {武将名: (勢力, 家, 星)}。まとまりの全員が含まれるものを優先し、
+    次に「〜以外」が2名以内のまとまりを使い、残りは名前を並べる。"""
+    if len(names) <= 3:
+        return "・".join(names)
+    rest = [n for n in names if n in roster]
+    parts = []
+    for allow_missing in (False, True):
+        for idx in (0, 1):  # 勢力 → 家 の順
+            groups = {}
+            for n in rest:
+                groups.setdefault((roster[n][idx], roster[n][2]), []).append(n)
+            for (g, star), members in groups.items():
+                total = [n for n, v in roster.items() if (v[idx], v[2]) == (g, star)]
+                missing = [n for n in total if n not in members]
+                if not missing and len(members) >= 2:
+                    parts.append(f"{g}の★{star}")
+                elif allow_missing and len(members) >= 4 and len(missing) <= 2 and len(members) >= 0.7 * len(total):
+                    parts.append(f"{g}の★{star}（{'・'.join(missing)}以外）")
+                else:
+                    continue
+                rest = [n for n in rest if n not in members]
+    parts += rest + [n for n in names if n not in roster]
+    return "・".join(parts)
 
 
 # ---------------------------------------------------------------- はてなの真戦Wiki
@@ -487,6 +516,11 @@ def main():
             if not s["source"] or (s["source"] in ("伝授戦法", "事件戦法") and not s["teachers"]):
                 s["needsCheck"].append("伝授元")
         del s["_raw"], s["_rateSrc"]
+
+    # 事件戦法の交換武将は、勢力・家・星のまとまりで短く表す
+    roster = {tr(h["name"]): (tr(h["camp"]), tr(h["family"]), h["star"]) for h in cfg["hero"] if not h["name"].startswith("军略_")}
+    for s in skills.values():
+        s["exchange"] = summarize_generals(s["teachers"], roster) if s["source"] == "事件戦法" and s["teachers"] else ""
 
     chosen_from = {s["name"]: s.pop("_from", "公式") for s in skills.values()}
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))

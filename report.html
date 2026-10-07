@@ -146,7 +146,7 @@ function select() {
   updateTeacherLabel();
   $("#current").innerHTML = `
     <p class="small" style="margin:6px 0">発動確率：${esc(s.rate || "不明")}${s.rateUnsure ? "?" : ""}／読み：${esc(s.kana || "不明")}${s.kanaUnsure ? "?" : ""}<br>
-      入手：${esc(s.source || "不明")}／${s.source === "事件戦法" ? `交換：${esc(s.teachers.join("・") || "不明")}` : s.teachers.length ? `伝授元：${esc(s.teachers.join("・"))}` : s.owners.length ? `固有：${esc(s.owners.join("・"))}` : "伝授元：不明"}<br>
+      入手：${esc(s.source || "不明")}／${s.source === "事件戦法" ? `交換：${esc(s.exchange || "不明")}` : s.teachers.length ? `伝授元：${esc(s.teachers.join("・"))}` : s.owners.length ? `固有：${esc(s.owners.join("・"))}` : "伝授元：不明"}<br>
       効果タイプ：${esc(s.effectTypes.join("・"))}／対象：${esc(s.target)}／兵種：${esc(s.troops.join("・"))}</p>
     <div class="tdesc">${esc(s.desc)}</div>
     ${s.valuesNote ? `<p class="small muted">※ ${esc(s.valuesNote)}</p>` : ""}`;
