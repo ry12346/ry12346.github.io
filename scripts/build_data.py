@@ -264,7 +264,7 @@ def parse_slg_generals(path: Path):
 
 KENBO_STAT = [("武勇", "bu"), ("知略", "chi"), ("統率", "tou"), ("速度", "spd"), ("政務", "sei"), ("魅力", "mi")]
 # kenbo の data-limited → 表示名（シーズン限定武将・イベント限定パック）
-KENBO_LIMITED = {"S2": "S2限定", "S3": "S3限定", "PK": "PK1限定", "PK2": "PK2限定", "event": "花舞絢爛"}
+KENBO_LIMITED = {"S2": "S2限定", "S3": "S3限定", "event": "花舞絢爛"}  # PK・PK2 は限定武将ではない（PKシーズンで登場した武将）
 KENBO_RANK = {"主特性": "無凸", "ランク1": "1凸", "ランク2": "2凸", "ランク3": "3凸", "ランク4": "4凸", "ランク5": "5凸"}
 
 
