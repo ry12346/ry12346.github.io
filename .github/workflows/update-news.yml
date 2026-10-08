@@ -1,0 +1,38 @@
+name: 公式ニュースの取り込み
+
+on:
+  schedule:
+    - cron: "0 21 * * *" # 毎日 06:00 JST
+  workflow_dispatch: # GitHub の Actions 画面の「Run workflow」で手動実行
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-news
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 新着ニュースを取得
+        run: python scripts/fetch_news.py
+
+      - name: 変更があればコミット
+        run: |
+          if [ -z "$(git status --porcelain -- data/news.json data/news_text.json data/news)" ]; then
+            echo "新着なし"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
+          git add data/news.json data/news_text.json data/news
+          git commit -m "公式ニュースを更新"
+          git push

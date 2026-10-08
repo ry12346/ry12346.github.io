@@ -44,6 +44,12 @@ python scripts/build_data.py
 
 `data/reference.json`（戦法経験値表など）は手入力。ゲーム内で確かめたら `verified` を `true` にすると「要検証」表示が消える。
 
+## 公式ニュース（自動）
+
+`news.html` は公式サイトのニュースを表示する。GitHub Actions（`.github/workflows/update-news.yml`）が毎日 06:00 JST に `scripts/fetch_news.py` を実行し、新着があれば `data/news.json`（一覧）・`data/news/{id}.json`（本文）・`data/news_text.json`（検索用）をコミットする。手で動かすときは GitHub の Actions 画面で「公式ニュースの取り込み」→「Run workflow」。
+
+画像だけの記事（新武将徹底解説、大名録など）の数値をデータに反映するときは、画像を読んで `data/official.json` に入れる。
+
 ## 新しいツールを追加する
 
 `assets/site.js` の `TOOLS` に1件足すと、トップページにカードが出る。

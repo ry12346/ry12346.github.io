@@ -194,3 +194,26 @@ footer{max-width:1180px;margin:0 auto;padding:0 16px 40px;font-size:11px;color:v
   .frow > label{width:100%}
   .table-wrap{max-height:none}
 }
+
+/* ---------- news ---------- */
+.news-list{display:grid;gap:8px}
+.news-item{background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.news-head{all:unset;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;width:100%;padding:12px 14px;cursor:pointer}
+.news-head:hover{background:#faf7f0}
+.news-head:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.news-date{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.news-title{font-weight:800;font-size:14px;flex:1 1 260px}
+.news-cat[data-c=メンテナンス]{background:#e4ecf3;color:#28506f}
+.news-cat[data-c=武将・戦法]{background:var(--gold-soft);color:#7a5a24}
+.news-cat[data-c=大名録・戦況]{background:#efe6f5;color:#5b3a7a}
+.news-cat[data-c=イベント]{background:var(--ok-bg);color:var(--ok)}
+.news-sum{margin:-6px 14px 10px;font-size:12px;color:var(--muted)}
+.news-body{border-top:1px dashed var(--line);padding:12px 14px}
+.news-html{font-size:14px;line-height:1.8;overflow-wrap:anywhere}
+.news-html p{margin:0 0 10px}
+.news-html img{display:block;max-width:100%;height:auto;margin:8px auto;border-radius:6px}
+.news-html table{border-collapse:collapse;font-size:12px;display:block;overflow-x:auto}
+.news-html td,.news-html th{border:1px solid var(--line);padding:4px 6px}
+.home-news{display:grid;gap:6px}
+.home-news a{display:flex;gap:10px;align-items:baseline;text-decoration:none;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.home-news a:hover{border-color:#c4a56f}

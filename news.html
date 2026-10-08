@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#1f3443">
+<title>公式ニュース | 真戦データ帳</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231f3443%27/%3E%3Ctext x=%2732%27 y=%2745%27 font-size=%2736%27 text-anchor=%27middle%27 fill=%27%23f2d9a8%27 font-weight=%27900%27%3E%E7%9C%9F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="page-head">
+    <div class="eyebrow">OFFICIAL NEWS</div>
+    <h1>公式ニュース</h1>
+    <p>公式サイトのお知らせを毎日自動で取り込んでいます。タイトルを押すと本文を表示します。</p>
+  </div>
+
+  <div class="card filters">
+    <div class="frow"><input class="search" id="q" type="search" placeholder="タイトル・本文で検索（例：重農主義、伊達政宗）" autocomplete="off"></div>
+    <div class="frow" id="f-cat"><label>種類</label></div>
+  </div>
+
+  <div class="toolbar">
+    <span class="small muted" id="hint"></span>
+    <span class="count" id="count"></span>
+  </div>
+
+  <div id="list" class="news-list"></div>
+  <div style="text-align:center;margin-top:14px"><button type="button" class="rp-btn" id="more" hidden>もっと見る</button></div>
+</main>
+
+<script type="module">
+import { $, esc, fold, loadJSON } from "./assets/site.js";
+
+const ORDER = ["メンテナンス", "武将・戦法", "大名録・戦況", "シーズン", "イベント", "お知らせ", "サーバー予定"];
+const PAGE = 30;
+const news = await loadJSON("news.json");
+for (const n of news) n._q = fold(n.title + " " + n.summary);
+
+// 種類チップ: 初期状態は「サーバー予定」以外を表示（選択なし＝サーバー予定を除く全部）
+const selected = new Set();
+const cats = ORDER.filter((c) => news.some((n) => n.category === c));
+$("#f-cat").insertAdjacentHTML("beforeend", cats.map((c) =>
+  `<button type="button" class="chip" aria-pressed="false" data-v="${esc(c)}">${esc(c)}（${news.filter((n) => n.category === c).length}）</button>`).join(""));
+$("#f-cat").addEventListener("click", (e) => {
+  const b = e.target.closest(".chip");
+  if (!b) return;
+  const v = b.dataset.v;
+  selected.has(v) ? selected.delete(v) : selected.add(v);
+  b.setAttribute("aria-pressed", selected.has(v));
+  shown = PAGE;
+  render();
+});
+// 本文の全文検索: 最初に検索したときだけ本文テキストを読み込む
+let fullText = null;
+$("#q").addEventListener("input", async () => {
+  shown = PAGE;
+  if (!fullText && $("#q").value.trim()) {
+    fullText = {};
+    try {
+      const t = await loadJSON("news_text.json");
+      for (const n of news) n._q += " " + fold(t[n.id] || "");
+    } catch {}
+  }
+  render();
+});
+
+let shown = PAGE;
+function filtered() {
+  const q = fold($("#q").value);
+  return news.filter((n) => (selected.size ? selected.has(n.category) : n.category !== "サーバー予定") && (!q || n._q.includes(q)));
+}
+
+function render() {
+  const rows = filtered();
+  $("#count").textContent = `${rows.length} 件`;
+  $("#hint").textContent = selected.size ? "" : "「サーバー予定」（一部サーバーの開幕・評定の予告）は種類を選ぶと表示します";
+  $("#list").innerHTML = rows.slice(0, shown).map((n) => `
+    <article class="news-item" data-id="${n.id}">
+      <button type="button" class="news-head" aria-expanded="false">
+        <span class="news-date">${esc(n.date)}</span>
+        <span class="tag news-cat" data-c="${esc(n.category)}">${esc(n.category)}</span>
+        <span class="news-title">${esc(n.title)}${n.imageOnly ? ' <span class="small muted">（画像）</span>' : ""}</span>
+      </button>
+      ${n.summary ? `<p class="news-sum">${esc(n.summary)}</p>` : ""}
+      <div class="news-body" hidden></div>
+    </article>`).join("") || `<div class="empty card">該当するニュースがありません</div>`;
+  $("#more").hidden = rows.length <= shown;
+}
+
+$("#more").addEventListener("click", () => { shown += PAGE; render(); });
+
+$("#list").addEventListener("click", async (e) => {
+  const head = e.target.closest(".news-head");
+  if (!head) return;
+  const item = head.closest(".news-item");
+  const body = item.querySelector(".news-body");
+  const open = head.getAttribute("aria-expanded") === "true";
+  head.setAttribute("aria-expanded", !open);
+  body.hidden = open;
+  if (open || body.dataset.loaded) return;
+  body.innerHTML = '<p class="muted small">読み込み中…</p>';
+  try {
+    const n = news.find((x) => x.id === +item.dataset.id);
+    const d = await loadJSON(`news/${n.id}.json`);
+    body.innerHTML = `<div class="news-html">${d.html}</div>
+      <p class="small"><a href="${esc(n.url)}" target="_blank" rel="noopener">公式サイトで見る ↗</a></p>`;
+    body.dataset.loaded = "1";
+  } catch {
+    body.innerHTML = '<p class="muted small">本文を読み込めませんでした。</p>';
+  }
+});
+
+render();
+
+// トップページから #記事ID で来たら、その記事を開く
+const target = +location.hash.slice(1);
+if (target && news.some((n) => n.id === target)) {
+  const n = news.find((x) => x.id === target);
+  if (n.category === "サーバー予定") { selected.add(n.category); document.querySelector(`#f-cat .chip[data-v="${n.category}"]`)?.setAttribute("aria-pressed", "true"); render(); }
+  const el = document.querySelector(`.news-item[data-id="${target}"] .news-head`);
+  if (el) { el.click(); el.scrollIntoView({ block: "start" }); }
+}
+</script>
+</body>
+</html>

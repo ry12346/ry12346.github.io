@@ -38,6 +38,9 @@
     </a>
   </div>
 
+  <h2 class="section-title">公式の最新のお知らせ <a href="news.html" class="small" style="letter-spacing:0;font-weight:700;margin-left:8px">すべて見る →</a></h2>
+  <div class="home-news" id="home-news"></div>
+
   <h2 class="section-title">ツール</h2>
   <div class="tiles" id="tools"></div>
 </main>
@@ -51,6 +54,11 @@ document.getElementById("tools").innerHTML = TOOLS.map((t) => `
     <strong>${esc(t.title)}</strong>
     <span>${esc(t.desc)}</span>
   </a>`).join("");
+
+loadJSON("news.json").then((list) => {
+  document.getElementById("home-news").innerHTML = list.filter((n) => n.category !== "サーバー予定").slice(0, 5).map((n) => `
+    <a href="news.html#${n.id}"><span class="news-date">${esc(n.date)}</span><span class="tag news-cat" data-c="${esc(n.category)}">${esc(n.category)}</span><span class="news-title">${esc(n.title)}</span></a>`).join("");
+}).catch(() => {});
 
 loadJSON("meta.json").then((m) => {
   document.getElementById("hero-stats").innerHTML = [
