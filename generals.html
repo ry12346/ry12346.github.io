@@ -177,7 +177,7 @@ function openDetail(h) {
     </div>
     <div class="dlg-body">
       <section>
-        <h3>ステータス</h3>
+        <h3>ステータス${h.statsOfficial ? ' <span class="tag ok" style="font-size:10px;vertical-align:middle">公式発表</span>' : ""}</h3>
         ${h.stats ? `
         <table class="mini">
           <thead><tr><th>属性</th><th>Lv1</th><th>成長値</th><th>Lv20</th><th>Lv40</th><th>Lv50</th></tr></thead>

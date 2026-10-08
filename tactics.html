@@ -93,7 +93,7 @@ function card(s) {
     </div>
     <div class="tags" style="justify-content:flex-start;margin:0">
       ${s.officialOnly ? '<span class="tag unofficial" title="公式の設定データにはあるが、攻略サイトに掲載が無い">公式データのみ</span>' : `<span class="tag src">${esc(s.source)}</span>`}
-      ${s.confirmed ? '<span class="tag ok" title="一門メンバーがゲーム内で確認した数値">確認済み</span>' : ""}
+      ${s.confirmed ? (s.confirmedBy === "公式" ? '<span class="tag ok" title="公式ニュースで発表された数値">公式値</span>' : '<span class="tag ok" title="一門メンバーがゲーム内で確認した数値">確認済み</span>') : ""}
       ${s.effectTypes.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
       ${s.target ? `<span class="tag">${esc(s.target)}</span>` : ""}
     </div>

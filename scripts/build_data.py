@@ -128,7 +128,8 @@ def format_value(v: str, pct: bool) -> str:
 
 def fill_template(raw: str, values: dict) -> str:
     raw = re.sub(r"<font[^>]*>(.*?)</font>", r"\1", raw).strip()
-    return re.sub(r"\{(\d+)(%?)\}", lambda m: format_value(values[m.group(1)], bool(m.group(2))), raw)
+    filled = re.sub(r"\{(\d+)(%?)\}", lambda m: format_value(values[m.group(1)], bool(m.group(2))), raw)
+    return filled.replace("%%", "%")  # 「{3}%」のように%が欄の外にある書き方への対策
 
 
 def summarize_generals(names: list, roster: dict):
@@ -323,7 +324,18 @@ def main():
     hero_kana = {norm(k): v for k, v in kana_file.get("武将の読み", {}).items()}
     overrides = json.loads((OUT / "overrides.json").read_text(encoding="utf-8")) if (OUT / "overrides.json").exists() else {}
     # 一門メンバーの報告（scripts/import_reports.py で取り込む）: {戦法名: {発動率, 数値: {番号: 値}, 読み}}
-    tactic_ov = {norm(k): v for k, v in overrides.get("戦法", {}).items()}
+    official_data = json.loads((OUT / "official.json").read_text(encoding="utf-8")) if (OUT / "official.json").exists() else {}
+    official_tac = {norm(k): v for k, v in official_data.get("戦法", {}).items()}
+    # 公式ニュースの値の上に、メンバーの報告を項目ごとに重ねる（数値は番号ごと）
+    tactic_ov = {k: dict(v) for k, v in official_tac.items()}
+    for k, v in overrides.get("戦法", {}).items():
+        merged = tactic_ov.setdefault(norm(k), {})
+        for field, val in v.items():
+            if field == "数値":
+                merged["数値"] = {**merged.get("数値", {}), **val}
+            else:
+                merged[field] = val
+    official_heroes = {norm(k): v for k, v in official_data.get("武将", {}).items()}
 
     # ---- 戦法
     skills = {}
@@ -349,6 +361,7 @@ def main():
             "_raw": tr(s["tips"]),
             "_rateSrc": set(),
             "confirmed": False,
+            "confirmedBy": "",
             "reported": {},
             "needsCheck": [],
             "descHasValues": False,
@@ -420,6 +433,9 @@ def main():
                 if r:
                     skills[sid]["rate"] = r.group(1)
                     skills[sid]["_rateSrc"].add("Wiki")
+        if key in official_heroes:  # 公式ニュースの Lv1・成長値を最優先
+            rec["stats"] = {k2: official_heroes[key][label] for label, k2 in STAT_KEYS if label in official_heroes[key]}
+            rec["statsOfficial"] = True
         if not rec["stats"]:
             # Lv1・成長値はどこにも無いので Lv50 の値だけ持つ（kenbo を優先。SLGSIM は Wiki と1割ほど食い違うため）
             rec["lv50"] = (ken_gen.get(key) or {}).get("lv50") or (slg_gen.get(key) or {}).get("lv50")
@@ -507,6 +523,8 @@ def main():
         s["reported"] = vals
         if s["slots"] and all(str(x["n"]) in vals for x in s["slots"]):
             s["desc"], s["descHasValues"], s["valuesNote"], s["confirmed"] = fill_template(s["_raw"], vals), True, "", True
+            off_vals = {str(k2): v2 for k2, v2 in official_tac.get(key, {}).get("数値", {}).items()}
+            s["confirmedBy"] = "公式" if all(off_vals.get(k2) == v2 for k2, v2 in vals.items()) else "報告"
         # 伝授戦法なのに伝授元が取れていないもの（星3・4武将の固有戦法）は、所持武将を伝授元として表示
         if s["source"] == "伝授戦法" and not s["teachers"] and s["owners"]:
             s["teachers"], s["owners"] = s["owners"], []
@@ -528,6 +546,20 @@ def main():
         s["exchange"] = ""
         if s["source"] == "事件戦法" and s["teachers"]:
             s["exchange"], s["teachers"] = summarize_generals(s["teachers"], roster)
+
+    # 公式ニュースにだけ載っている戦法（設定ファイルにまだ無いもの）
+    for i, (name, t) in enumerate(official_data.get("追加戦法", {}).items()):
+        if norm(name) in {norm(x["name"]) for x in skills.values()}:
+            continue
+        skills[f"extra{i}"] = {
+            "id": 90000 + i, "name": name, "kana": t.get("読み", ""), "kanaUnsure": False,
+            "grade": t["品質"], "kind": t["種別"], "effectTypes": t.get("効果タイプ", []),
+            "troops": t.get("兵種", ["騎兵", "弓兵", "鉄砲", "足軽", "兵器"]), "target": t.get("対象", ""),
+            "summary": "", "desc": t["効果"], "template": "", "slots": [], "confirmed": True, "confirmedBy": "公式",
+            "reported": {}, "needsCheck": [], "descHasValues": True, "valuesNote": "",
+            "rate": t.get("発動率", "100%"), "rateUnsure": False, "source": t.get("入手", ""),
+            "owners": [], "teachers": t.get("伝授元", []), "officialOnly": False, "exchange": "",
+        }
 
     chosen_from = {s["name"]: s.pop("_from", "公式") for s in skills.values()}
     skill_list = sorted(skills.values(), key=lambda x: (x["grade"], x["id"]))
