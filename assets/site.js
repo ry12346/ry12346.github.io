@@ -27,12 +27,6 @@ export const TOOLS = [
     title: "占領時間・到着予想時刻計算",
     desc: "占領開始日時とマス数から、時間帯別の占領時間を考慮して終了予想日時を計算",
   },
-  {
-    url: "https://wankorubens.github.io/Shinsen_Research_Institute/",
-    icon: "研",
-    title: "真戦研究所（別一門のサイト）",
-    desc: "模擬対戦・土地模擬・Tier測定・高評価編成ランキングなど。一部の機能はログインと管理者の認可が必要",
-  },
 ];
 
 export const FACTIONS = ["織田", "豊臣", "徳川", "武田", "上杉", "群雄"];
