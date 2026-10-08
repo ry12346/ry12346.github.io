@@ -115,8 +115,7 @@ $("#list").addEventListener("click", async (e) => {
   const imgBtn = e.target.closest(".news-img-btn");
   if (imgBtn) {
     showImages(imgBtn.closest(".news-body"));
-    imgBtn.nextElementSibling?.remove();
-    imgBtn.remove();
+    imgBtn.closest(".news-img-bar").remove();
     return;
   }
   const inner = e.target.closest("a[data-news]");
@@ -141,9 +140,9 @@ $("#list").addEventListener("click", async (e) => {
     // 画像は src を外して読み込まないようにし、「画像を表示」を押したときだけ縮小版を読み込む
     const html = d.html.replace(/<img src="([^"]+)"[^>]*>/g, (_, src) => `<img data-orig="${src}" alt="">`);
     const count = (html.match(/data-orig=/g) || []).length;
-    body.innerHTML = `<div class="news-html">${html}</div>
-      ${count ? `<button type="button" class="rp-btn news-img-btn">画像を表示（${count}枚）</button>
-        <p class="small muted" style="margin:6px 0 0">通信量を抑えた縮小版を表示します。画像を押すと元の大きさで開きます。</p>` : ""}
+    body.innerHTML = `${count ? `<div class="news-img-bar"><button type="button" class="rp-btn news-img-btn">画像を表示（${count}枚）</button>
+        <p class="small muted" style="margin:6px 0 0">通信量を抑えた縮小版を表示します。画像を押すと元の大きさで開きます。</p></div>` : ""}
+      <div class="news-html">${html}</div>
       <p class="small"><a href="${esc(n.url)}" target="_blank" rel="noopener">公式サイトで見る ↗</a></p>`;
     body.dataset.loaded = "1";
   } catch {

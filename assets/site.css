@@ -209,6 +209,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 16px 40px;font-size:11px;color:v
 .news-cat[data-c=イベント]{background:var(--ok-bg);color:var(--ok)}
 .news-sum{margin:-6px 14px 10px;font-size:12px;color:var(--muted)}
 .news-body{border-top:1px dashed var(--line);padding:12px 14px}
+.news-img-bar{margin-bottom:12px}
 .news-html{font-size:14px;line-height:1.8;overflow-wrap:anywhere}
 .news-html p{margin:0 0 10px}
 .news-html img{display:block;max-width:100%;height:auto;margin:8px auto;border-radius:6px}
