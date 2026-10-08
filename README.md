@@ -48,6 +48,11 @@ python scripts/build_data.py
 
 `news.html` は公式サイトのニュースを表示する。GitHub Actions（`.github/workflows/update-news.yml`）が毎日 06:00 JST に `scripts/fetch_news.py` を実行し、新着があれば `data/news.json`（一覧）・`data/news/{id}.json`（本文）・`data/news_text.json`（検索用）をコミットする。手で動かすときは GitHub の Actions 画面で「公式ニュースの取り込み」→「Run workflow」。
 
+同じ実行で次も行う。
+- メンテナンス予告の箇条書きから「戦法名」を含む調整・修正を探し、`data/adjustments.json` に記録（戦法一覧・武将詳細に「調整・修正あり」と表示）
+- `scripts/check_cfg.py` で公式の設定ファイルに新しい武将・戦法が増えたかを確認（記録は `data/cfg_seen.json`）
+- 「武将・戦法」「大名録・戦況」の新着記事、新しい調整、設定ファイルの新データがあれば GitHub の Issue を作る。実行が失敗したときも Issue を作る（GitHub から通知メールが届く）
+
 画像だけの記事（新武将徹底解説、大名録など）の数値をデータに反映するときは、画像を読んで `data/official.json` に入れる。
 
 ## 新しいツールを追加する

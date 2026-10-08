@@ -22,6 +22,7 @@
     <div class="frow" id="f-faction"><label>勢力</label></div>
     <div class="frow" id="f-star"><label>レア度</label></div>
     <div class="frow" id="f-cost"><label>コスト</label></div>
+    <div class="frow" id="f-lim"><label>限定</label></div>
   </div>
 
   <div class="toolbar">
@@ -52,7 +53,8 @@
 import { $, esc, fold, loadJSON, chipGroup, FACTIONS } from "./assets/site.js";
 
 const STATS = [["bu", "武勇"], ["chi", "知略"], ["tou", "統率"], ["spd", "速度"], ["sei", "政務"], ["mi", "魅力"]];
-const [heroes, skills] = await Promise.all([loadJSON("heroes.json"), loadJSON("skills.json")]);
+const [heroes, skills, adjustments] = await Promise.all([loadJSON("heroes.json"), loadJSON("skills.json"), loadJSON("adjustments.json").catch(() => ({}))]);
+const LIMITS = ["通常", "S2限定", "S3限定", "PK1限定", "PK2限定", "花舞絢爛"];
 const skillById = new Map(skills.map((s) => [s.id, s]));
 for (const h of heroes) {
   h._q = fold([h.name, h.kana, h.uniqueSkill, h.family].join(" "));
@@ -86,6 +88,7 @@ const COLS = [
 const factionF = chipGroup($("#f-faction"), FACTIONS, render);
 const starF = chipGroup($("#f-star"), [5, 4], render, { label: (v) => "★" + v });
 const costF = chipGroup($("#f-cost"), [7, 6, 5, 4, 3], render);
+const limF = chipGroup($("#f-lim"), LIMITS.filter((l) => heroes.some((h) => (h.limited || "通常") === l)), render);
 $("#q").addEventListener("input", render);
 
 $("#mode").addEventListener("click", (e) => {
@@ -130,7 +133,7 @@ function statCell(h, k) {
 
 function render() {
   const q = fold($("#q").value);
-  let rows = heroes.filter((h) => factionF.test(h.faction) && starF.test(h.star) && costF.test(h.cost) && (!q || h._q.includes(q)));
+  let rows = heroes.filter((h) => factionF.test(h.faction) && starF.test(h.star) && costF.test(h.cost) && limF.test(h.limited || "通常") && (!q || h._q.includes(q)));
   if (sortKey) {
     const col = COLS.find((c) => c.key === sortKey);
     rows = rows.slice().sort((a, b) => {
@@ -145,7 +148,7 @@ function render() {
   $("#tbl tbody").innerHTML = rows.length
     ? rows.map((h) => `
       <tr data-id="${h.id}">
-        <td class="name">${esc(h.name)}${h.lv50 ? ' <span class="badge-lv50">Lv50のみ</span>' : ""}${h.kana ? `<span class="kana">${esc(h.kana)}</span>` : ""}</td>
+        <td class="name">${esc(h.name)}${h.limited ? ` <span class="badge-lim">${esc(h.limited)}</span>` : ""}${h.lv50 ? ' <span class="badge-lv50">Lv50のみ</span>' : ""}${h.kana ? `<span class="kana">${esc(h.kana)}</span>` : ""}</td>
         <td class="num"><span class="stars">${"★".repeat(h.star)}</span></td>
         <td><span class="fac" data-f="${esc(h.faction)}">${esc(h.faction)}</span></td>
         <td class="num">${h.cost}</td>
@@ -198,6 +201,7 @@ function openDetail(h) {
       </section>
       <section>
         <h3>固有戦法：${esc(h.uniqueSkill)}</h3>
+        ${(adjustments[h.uniqueSkill] || []).map((a) => `<a class="adjust" href="news.html#${a.id}" style="margin-bottom:6px">⚠ ${esc(a.date)} のメンテナンス：${esc(a.text.split("\n")[0].replace(/^[・•]\s*/, ""))}</a>`).join("")}
         ${s ? `
           <div class="tags" style="justify-content:flex-start;margin:0 0 6px">
             <span class="tag kind">${esc(s.kind)}</span>

@@ -57,7 +57,7 @@ ALIASES = {
     "弾嵐雨霞": "弾嵐雨霰",
     "雷神切り": "雷神斬り",
 }
-VARIANTS = str.maketrans({"髙": "高", "熙": "煕", "簞": "箪", "訚": "誾", "凛": "凜"})
+VARIANTS = str.maketrans({"髙": "高", "熙": "煕", "簞": "箪", "訚": "誾", "凛": "凜", "溪": "渓"})
 
 
 def norm_raw(name: str) -> str:
@@ -263,6 +263,8 @@ def parse_slg_generals(path: Path):
 
 
 KENBO_STAT = [("武勇", "bu"), ("知略", "chi"), ("統率", "tou"), ("速度", "spd"), ("政務", "sei"), ("魅力", "mi")]
+# kenbo の data-limited → 表示名（シーズン限定武将・イベント限定パック）
+KENBO_LIMITED = {"S2": "S2限定", "S3": "S3限定", "PK": "PK1限定", "PK2": "PK2限定", "event": "花舞絢爛"}
 KENBO_RANK = {"主特性": "無凸", "ランク1": "1凸", "ランク2": "2凸", "ランク3": "3凸", "ランク4": "4凸", "ランク5": "5凸"}
 
 
@@ -281,7 +283,12 @@ def parse_kenbo_busho(path: Path):
             r'<div class="tokusei-slot-label">(.*?)</div>\s*<button[^>]*data-name="([^"]*)" data-effect="([^"]*)"', row, re.S
         ):
             traits.append({"rank": KENBO_RANK.get(text(label), text(label)), "name": htmllib.unescape(tname), "effect": htmllib.unescape(eff)})
-        out[norm(name.group(1))] = {"lv50": lv50 if len(lv50) == 6 else None, "traits": traits}
+        lim = re.search(r'data-limited="([^"]*)"', attrs)
+        out[norm(name.group(1))] = {
+            "lv50": lv50 if len(lv50) == 6 else None,
+            "traits": traits,
+            "limited": KENBO_LIMITED.get(lim.group(1), "") if lim else "",
+        }
     return out
 
 
@@ -419,6 +426,7 @@ def main():
             "lv50": None,  # Lv1・成長値が無い武将のみ: {key: Lv50の値}
             "troopBonus": [],
             "traits": [],
+            "limited": "",  # シーズン限定・イベント限定の区分（例: S2限定、PK2限定）
         }
         key = norm(name)
         w = hz_gen.get(key)
@@ -442,6 +450,7 @@ def main():
         if not rec["stats"]:
             # Lv1・成長値はどこにも無いので Lv50 の値だけ持つ（kenbo を優先。SLGSIM は Wiki と1割ほど食い違うため）
             rec["lv50"] = (ken_gen.get(key) or {}).get("lv50") or (slg_gen.get(key) or {}).get("lv50")
+        rec["limited"] = (official_heroes.get(key) or {}).get("限定") or (ken_gen.get(key) or {}).get("limited", "")
         if not rec["traits"] and key in ken_gen:
             rec["traits"] = ken_gen[key]["traits"]
         if not rec["kana"] and key in slg_gen:
@@ -552,6 +561,24 @@ def main():
                 s["needsCheck"].append("伝授元")
         del s["_raw"], s["_rateSrc"]
 
+    # 土地守備軍（NPC）専用の戦法
+    npc = {norm(n) for n in official_data.get("守備軍専用", [])}
+    for s in skills.values():
+        s["npcOnly"] = norm(s["name"]) in npc
+
+    # 戦法の限定区分: 固有の持ち主・伝授元がすべて同じ限定区分の武将なら、その区分を付ける
+    hero_limited = {tr(h["name"]): "" for h in cfg["hero"]}
+    hero_limited.update({h["name"]: h["limited"] for h in heroes})
+    for k, v in ken_gen.items():
+        for name in hero_limited:
+            if norm(name) == k and not hero_limited[name]:
+                hero_limited[name] = v.get("limited", "")
+    for key2, s in skills.items():
+        o = tactic_ov.get(norm(s["name"]), {})
+        people = [n for n in s["owners"] + s["teachers"] if n in hero_limited]
+        labels = {hero_limited[n] for n in people}
+        s["limited"] = o.get("限定") or (labels.pop() if people and len(labels) == 1 else "")
+
     # 事件戦法の交換武将は、勢力・家・星のまとまりで短く表す
     roster = {tr(h["name"]): (tr(h["camp"]), tr(h["family"]), h["star"]) for h in cfg["hero"] if not h["name"].startswith("军略_")}
     for s in skills.values():
@@ -571,6 +598,8 @@ def main():
             "reported": {}, "needsCheck": [], "descHasValues": True, "valuesNote": "",
             "rate": t.get("発動率", "100%"), "rateUnsure": False, "source": t.get("入手", ""),
             "owners": [], "teachers": t.get("伝授元", []), "officialOnly": False, "exchange": "",
+            "npcOnly": False,
+            "limited": t.get("限定") or ({hero_limited.get(n, "") for n in t.get("伝授元", [])} or {""}).pop() if len({hero_limited.get(n, "") for n in t.get("伝授元", [])}) <= 1 else "",
         }
 
     chosen_from = {s["name"]: s.pop("_from", "公式") for s in skills.values()}

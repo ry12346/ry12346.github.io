@@ -2,6 +2,7 @@
 
   python scripts/fetch_news.py            # 新着だけ取得（GitHub Actions で毎日実行）
   python scripts/fetch_news.py --all      # ID 1 から全件取り直す
+  python scripts/fetch_news.py --report 報告.md   # 反映が必要そうな新着を書き出す（Actions が Issue にする）
 
 公式サイト（nobunaga-shinsen.qookkagames.jp）のニュースは、連番のIDで
 get-entity API から取れる。前回の最大IDより先を順に問い合わせ、
@@ -138,6 +139,41 @@ def to_item(r: dict):
     return item, content
 
 
+ADJUST = ROOT / "data" / "adjustments.json"  # 戦法ごとの調整・修正のお知らせ
+SKILLS = ROOT / "data" / "skills.json"
+ADJUST_WORDS = r"調整|変更|修正|最適化|上方|下方"
+
+
+def find_adjustments(items: dict) -> dict:
+    """お知らせ本文から「戦法名」を含む調整・修正の行を探し、戦法名ごとにまとめる"""
+    if not SKILLS.exists():
+        return {}
+    names = {x["name"] for x in json.loads(SKILLS.read_text(encoding="utf-8"))}
+    found = {}
+    for x in sorted(items.values(), key=lambda v: v["id"]):
+        f = BODY_DIR / f"{x['id']}.json"
+        if x["category"] != "メンテナンス" or not f.exists():  # 調整はメンテナンス予告の箇条書きに載る
+            continue
+        h = json.loads(f.read_text(encoding="utf-8"))["html"]
+        text = htmllib.unescape(re.sub(r"<[^>]+>", "", re.sub(r"<br\s*/?>|</p>|</li>", "\n", h)))
+        lines = [l.strip() for l in text.split("\n")]
+        for i, line in enumerate(lines):
+            if not re.match(r"[・•]", line) or not re.search(ADJUST_WORDS, line):
+                continue
+            for name in set(re.findall(r"「([^」]+)」", line)) & names:
+                detail = [line]
+                for nxt in lines[i + 1 : i + 7]:  # 続く「調整前：」「調整後：」の行も含める
+                    if not nxt or re.match(r"[・•■▼]", nxt):
+                        break
+                    detail.append(nxt)
+                found.setdefault(name, []).append(
+                    {"id": x["id"], "date": x["date"], "title": x["title"], "text": "\n".join(detail)}
+                )
+    for v in found.values():
+        v.sort(key=lambda e: e["id"], reverse=True)
+    return found
+
+
 def main():
     BODY_DIR.mkdir(parents=True, exist_ok=True)
     items = {} if "--all" in sys.argv or not INDEX.exists() else {x["id"]: x for x in json.loads(INDEX.read_text(encoding="utf-8"))}
@@ -175,6 +211,25 @@ def main():
             h = json.loads(f.read_text(encoding="utf-8"))["html"]
             texts[x["id"]] = re.sub(r"\s+", " ", htmllib.unescape(re.sub(r"<[^>]+>", " ", h))).strip()
     SEARCH.write_text(json.dumps(texts, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    before_adj = json.loads(ADJUST.read_text(encoding="utf-8")) if ADJUST.exists() else {}
+    adjustments = find_adjustments(items)
+    ADJUST.write_text(json.dumps(adjustments, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    # 反映が必要そうな新着（画像の記事でデータが載るもの、戦法の調整）を報告ファイルに書く
+    if "--report" in sys.argv:
+        report = Path(sys.argv[sys.argv.index("--report") + 1])
+        notable = [x for x in added if x["category"] in ("武将・戦法", "大名録・戦況")]
+        new_adj = {k: v[0] for k, v in adjustments.items() if (before_adj.get(k) or [{}])[0].get("id") != v[0]["id"]}
+        if notable or new_adj:
+            lines = ["公式ニュースに、データへの反映が必要かもしれない新着があります。", ""]
+            if notable:
+                lines += ["### 武将・戦法 / 大名録の記事（画像のため自動では数値を取り込めません）"]
+                lines += [f"- {x['date']} [{x['title']}]({x['url']})" for x in notable] + [""]
+            if new_adj:
+                lines += ["### 戦法の調整・修正（戦法一覧に「調整・修正あり」と表示済み）"]
+                lines += [f"- {k}：{v['date']} {v['text'].splitlines()[0]}" for k, v in new_adj.items()] + [""]
+            lines += ["Claude に「この記事を反映して」と頼むと、画像を読んで data/official.json に登録します。"]
+            report.write_text("\n".join(lines), encoding="utf-8")
     print(f"ニュース {len(data)} 件（新着 {len(added)} 件）")
     for x in added:
         print(f"  #{x['id']} {x['date']} [{x['category']}] {x['title']}")

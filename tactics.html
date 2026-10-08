@@ -24,6 +24,7 @@
     <div class="frow" id="f-src"><label>入手</label></div>
     <div class="frow" id="f-type"><label>効果</label></div>
     <div class="frow" id="f-troop"><label>兵種</label></div>
+    <div class="frow" id="f-lim"><label>限定</label></div>
   </div>
 
   <div class="toolbar">
@@ -32,7 +33,7 @@
       <button type="button" data-s="rate" aria-pressed="false">発動確率順</button>
       <button type="button" data-s="name" aria-pressed="false">名前順</button>
     </div>
-    <label class="toggle"><input type="checkbox" id="show-unofficial"> 公式データにしかない戦法も表示（未実装の可能性）</label>
+    <label class="toggle"><input type="checkbox" id="show-unofficial"> 公式データにしかない戦法も表示（未実装・土地守備軍専用など）</label>
     <span class="count" id="count"></span>
   </div>
 
@@ -46,6 +47,8 @@ const TROOPS = ["騎兵", "弓兵", "鉄砲", "足軽", "兵器"];
 const KINDS = ["能動", "突撃", "受動", "指揮", "兵種", "陣法"];
 const GRADES = ["S", "A", "B", "C", "D"];
 const skills = await loadJSON("skills.json");
+const adjustments = await loadJSON("adjustments.json").catch(() => ({}));
+const LIMITS = ["通常", "S2限定", "S3限定", "PK1限定", "PK2限定", "花舞絢爛"];
 
 const uniq = (arr) => [...new Set(arr)];
 const order = (list, pref) => list.sort((a, b) => (pref.indexOf(a) + 1 || 99) - (pref.indexOf(b) + 1 || 99) || a.localeCompare(b, "ja"));
@@ -64,6 +67,7 @@ const gradeF = chipGroup($("#f-grade"), order(uniq(skills.map((s) => s.grade)), 
 const srcF = chipGroup($("#f-src"), order(uniq(skills.map((s) => s.source)), ["固有戦法", "伝授戦法", "事件戦法"]), render);
 const typeF = chipGroup($("#f-type"), order(uniq(skills.flatMap((s) => s.effectTypes)), []), render);
 const troopF = chipGroup($("#f-troop"), TROOPS, render);
+const limF = chipGroup($("#f-lim"), LIMITS.filter((l) => skills.some((s) => (s.limited || "通常") === l)), render);
 $("#q").addEventListener("input", render);
 let showUnofficial = false;
 $("#show-unofficial").addEventListener("change", (e) => { showUnofficial = e.target.checked; render(); });
@@ -88,11 +92,12 @@ function card(s) {
       <h3>${s.kana ? `<small>${esc(s.kana)}${s.kanaUnsure ? '<span class="kana-q" title="読みは要確認">?</span>' : ""}</small>` : ""}${esc(s.name)}</h3>
       <div class="tags">
         <span class="tag kind">${esc(s.kind)}</span>
+        ${s.limited ? `<span class="tag limited" title="${esc(s.limited)}の武将の戦法">${esc(s.limited)}</span>` : ""}
         ${s.rate ? `<span class="tag rate"${s.rateUnsure ? ' title="攻略サイト間で値が食い違うため要確認"' : ""}>${esc(s.rate)}${s.rateUnsure ? "?" : ""}</span>` : ""}
       </div>
     </div>
     <div class="tags" style="justify-content:flex-start;margin:0">
-      ${s.officialOnly ? '<span class="tag unofficial" title="公式の設定データにはあるが、攻略サイトに掲載が無い">公式データのみ</span>' : `<span class="tag src">${esc(s.source)}</span>`}
+      ${s.npcOnly ? '<span class="tag unofficial" title="土地守備軍が使う戦法。プレイヤーは入手できない">土地守備軍専用</span>' : s.officialOnly ? '<span class="tag unofficial" title="公式の設定データにはあるが、攻略サイトに掲載が無い">公式データのみ</span>' : `<span class="tag src">${esc(s.source)}</span>`}
       ${s.confirmed ? (s.confirmedBy === "公式" ? '<span class="tag ok" title="公式ニュースで発表された数値">公式値</span>' : '<span class="tag ok" title="一門メンバーがゲーム内で確認した数値">確認済み</span>') : ""}
       ${s.effectTypes.map((t) => `<span class="tag">${esc(t)}</span>`).join("")}
       ${s.target ? `<span class="tag">${esc(s.target)}</span>` : ""}
@@ -100,6 +105,11 @@ function card(s) {
     <div class="tdesc" data-full="${long ? 0 : 1}">${esc(long ? s.desc.slice(0, 150) + "…" : s.desc)}</div>
     ${long ? `<button class="more" type="button" data-id="${s.id}">続きを読む</button>` : ""}
     ${s.descHasValues ? (s.valuesNote ? `<span class="small muted">※ ${esc(s.valuesNote)}</span>` : "") : `<span class="small muted">※ ○はレベルで変わる数値（未収録）</span>`}
+    ${(adjustments[s.name] || []).length ? (() => {
+      const list = adjustments[s.name];
+      const a = list[0];
+      return `<a class="adjust" href="news.html#${a.id}" title="${esc(a.text)}">⚠ ${esc(a.date.slice(5).replace("-", "/"))} のメンテナンスで調整・修正あり${list.length > 1 ? `（ほか${list.length - 1}件）` : ""}：${esc(a.text.split("\n")[0].replace(/^[・•]\s*/, "").slice(0, 60))}</a>`;
+    })() : ""}
     ${s.needsCheck.length ? `<a class="more" href="report.html?t=${encodeURIComponent(s.name)}">未確認：${esc(s.needsCheck.join("・"))} → ゲーム内の値を報告する</a>` : ""}
     <div class="tmeta">
       <span class="troops">${TROOPS.map((t) => `<i class="${s.troops.includes(t) ? "on" : ""}">${t}</i>`).join("")}</span>
@@ -111,7 +121,7 @@ function card(s) {
 function render() {
   const q = fold($("#q").value);
   const rows = skills.filter((s) =>
-    kindF.test(s.kind) && gradeF.test(s.grade) && srcF.test(s.source) && typeF.test(s.effectTypes) && troopF.test(s.troops) && (!q || s._q.includes(q)) && (showUnofficial || !s.officialOnly));
+    kindF.test(s.kind) && gradeF.test(s.grade) && srcF.test(s.source) && typeF.test(s.effectTypes) && troopF.test(s.troops) && limF.test(s.limited || "通常") && (!q || s._q.includes(q)) && (showUnofficial || !s.officialOnly));
   if (sort === "rate") rows.sort((a, b) => rateNum(b) - rateNum(a) || GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade));
   else if (sort === "name") rows.sort((a, b) => (a.kana || a.name).localeCompare(b.kana || b.name, "ja"));
   else rows.sort((a, b) => GRADES.indexOf(a.grade) - GRADES.indexOf(b.grade) || KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || a.id - b.id);

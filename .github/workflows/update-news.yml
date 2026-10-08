@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: update-news
@@ -15,6 +16,8 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,16 +26,40 @@ jobs:
           python-version: "3.12"
 
       - name: 新着ニュースを取得
-        run: python scripts/fetch_news.py
+        run: python scripts/fetch_news.py --report "$RUNNER_TEMP/news_report.md"
+
+      - name: 公式の設定ファイルの変化を確認
+        run: python scripts/check_cfg.py "$RUNNER_TEMP/cfg_report.md"
 
       - name: 変更があればコミット
         run: |
-          if [ -z "$(git status --porcelain -- data/news.json data/news_text.json data/news)" ]; then
-            echo "新着なし"
+          if [ -z "$(git status --porcelain -- data)" ]; then
+            echo "変更なし"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898299+github-actions[bot]@users.noreply.github.com"
-          git add data/news.json data/news_text.json data/news
+          git add data/news.json data/news_text.json data/news data/adjustments.json data/cfg_seen.json
           git commit -m "公式ニュースを更新"
           git push
+
+      - name: 反映が必要そうな新着を Issue で知らせる
+        run: |
+          if [ -f "$RUNNER_TEMP/news_report.md" ]; then
+            gh issue create --title "公式ニュース: 反映が必要かもしれない新着（$(date -u -d '+9 hours' +%m/%d)）" --body-file "$RUNNER_TEMP/news_report.md"
+          fi
+          if [ -f "$RUNNER_TEMP/cfg_report.md" ]; then
+            gh issue create --title "公式設定ファイルに新しい武将・戦法（$(date -u -d '+9 hours' +%m/%d)）" --body-file "$RUNNER_TEMP/cfg_report.md"
+          fi
+
+      - name: 失敗したら Issue で知らせる
+        if: failure()
+        run: |
+          title="自動取り込みが失敗しました"
+          if [ -z "$(gh issue list --state open --search "in:title $title" --json number --jq '.[].number')" ]; then
+            gh issue create --title "$title" --body "公式ニュースの取り込み、または設定ファイルの確認が失敗しました。公式サイトの仕組みが変わった可能性があります。
+
+          ログ: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          原因を直して実行が成功したら、この Issue は閉じてください。"
+          fi
