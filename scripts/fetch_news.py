@@ -94,6 +94,23 @@ def summary(content: str, n: int = 90) -> str:
     return text[:n] + ("…" if len(text) > n else "")
 
 
+def link_list(r: dict) -> str:
+    """本文が空で、ほかの記事へのリンク集（jsonExt）だけを持つ記事を、リンクの一覧にする"""
+    try:
+        links = json.loads(r.get("jsonExt") or "[]")
+    except ValueError:
+        return ""
+    items = []
+    for x in links if isinstance(links, list) else []:
+        url, name = str(x.get("content", "")), htmllib.escape(str(x.get("name", "")))
+        m = re.search(r"#/news/(\d+)", url)
+        if m:
+            items.append(f'<li><a href="news.html#{m.group(1)}" data-news="{m.group(1)}">{name}</a></li>')
+        elif url.startswith("http"):
+            items.append(f'<li><a href="{htmllib.escape(url)}" target="_blank" rel="noopener">{name}</a></li>')
+    return f"<ul>{''.join(items)}</ul>" if items else ""
+
+
 def to_item(r: dict):
     if str(r.get("entityType")) != "1" or not r.get("name"):  # 1 = 記事（3 は画像バナー、2 は動画）
         return None, None
@@ -101,6 +118,8 @@ def to_item(r: dict):
     if not re.search(r"[ぁ-んァ-ヶ]", r["name"]) or r["name"].startswith("S11G-"):
         return None, None
     content = sanitize(r.get("longContent") or "")
+    if not re.sub(r"<[^>]+>|\s", "", content) and "<img" not in content:
+        content = link_list(r)
     when = datetime.fromtimestamp(int(r["gmtCreate"]) / 1000, JST)
     images = len(re.findall(r"<img", content))
     text_len = len(re.sub(r"<[^>]+>|\s", "", content))
@@ -113,6 +132,7 @@ def to_item(r: dict):
         "textOnly": images == 0,
         "imageOnly": text_len < 20 and images > 0,
         "summary": summary(content),
+        "empty": not re.sub(r"<[^>]+>|\s", "", content) and images == 0,  # 公式側でも本文が無い（後で入ることがある）
         "url": ARTICLE_URL.format(r["id"]),
     }
     return item, content
@@ -123,6 +143,7 @@ def main():
     items = {} if "--all" in sys.argv or not INDEX.exists() else {x["id"]: x for x in json.loads(INDEX.read_text(encoding="utf-8"))}
     last = max(items, default=0)
     ids = list(range(max(1, last - REFRESH + 1), last + 1)) if items else []
+    ids += [i for i, x in items.items() if x.get("empty") and i not in ids]  # 本文が空だった記事は取り直す
     added = []
 
     def take(i):

@@ -35,6 +35,9 @@ NAME_FIXES = {
     "挥砍": "薙ぎ払い",
     # multi_lang の訳は「三河武士隊」だが、ゲーム内の戦法名は「三河武士」
     "三河武士队": "三河武士",
+    # 設定ファイルでは「先鋒誘致」（挑発を付与）だが、公式ニュース（PK2 事件戦法紹介）で
+    # 「三方挟撃」（敵軍全体の速度低下）として発表された。後半の効果文・種別・ID が一致する
+    "诱敌深入": "三方挟撃",
 }
 
 
@@ -516,9 +519,18 @@ def main():
             s["kana"], s["kanaUnsure"] = o["読み"], False
         if o.get("入手"):
             s["source"] = o["入手"]
-        if o.get("伝授元") or o.get("交換"):
-            t = o.get("伝授元") or o.get("交換")
+        if o.get("伝授元"):  # 報告の「交換：」は取り込み時に伝授元へ入る。official.json の「交換」は表示用の文
+            t = o["伝授元"]
             s["teachers"] = t if isinstance(t, list) else [x for x in re.split(r"[・、,，/／\s]+", t) if x]
+        if o.get("交換"):
+            s["_exchangeText"] = o["交換"]
+        if key in tactic_ov:
+            s["officialOnly"] = False
+        if o.get("対象"):
+            s["target"] = o["対象"]
+        if o.get("効果"):  # 効果文ごと差し替え（設定ファイルの文と内容が変わったもの）
+            s["desc"], s["descHasValues"], s["valuesNote"], s["confirmed"] = o["効果"], True, "", True
+            s["confirmedBy"] = "公式" if key in official_tac and "効果" in official_tac[key] else "報告"
         vals = {str(k): v for k, v in o.get("数値", {}).items() if str(v).strip()}
         s["reported"] = vals
         if s["slots"] and all(str(x["n"]) in vals for x in s["slots"]):
@@ -536,15 +548,15 @@ def main():
                 s["needsCheck"].append("数値")
             if s["kanaUnsure"]:
                 s["needsCheck"].append("読み")
-            if not s["source"] or (s["source"] in ("伝授戦法", "事件戦法") and not s["teachers"]):
+            if not s["source"] or (s["source"] in ("伝授戦法", "事件戦法") and not s["teachers"] and not s.get("_exchangeText")):
                 s["needsCheck"].append("伝授元")
         del s["_raw"], s["_rateSrc"]
 
     # 事件戦法の交換武将は、勢力・家・星のまとまりで短く表す
     roster = {tr(h["name"]): (tr(h["camp"]), tr(h["family"]), h["star"]) for h in cfg["hero"] if not h["name"].startswith("军略_")}
     for s in skills.values():
-        s["exchange"] = ""
-        if s["source"] == "事件戦法" and s["teachers"]:
+        s["exchange"] = s.pop("_exchangeText", "")
+        if not s["exchange"] and s["source"] == "事件戦法" and s["teachers"]:
             s["exchange"], s["teachers"] = summarize_generals(s["teachers"], roster)
 
     # 公式ニュースにだけ載っている戦法（設定ファイルにまだ無いもの）

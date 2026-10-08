@@ -71,7 +71,7 @@ $("#q").addEventListener("input", async () => {
 let shown = PAGE;
 function filtered() {
   const q = fold($("#q").value);
-  return news.filter((n) => (selected.size ? selected.has(n.category) : n.category !== "サーバー予定") && (!q || n._q.includes(q)));
+  return news.filter((n) => !n.empty && (selected.size ? selected.has(n.category) : n.category !== "サーバー予定") && (!q || n._q.includes(q)));
 }
 
 function render() {
@@ -93,7 +93,39 @@ function render() {
 
 $("#more").addEventListener("click", () => { shown += PAGE; render(); });
 
+// 公式の画像サーバー（Alibaba OSS）の縮小・WebP変換を使う
+const resized = (src, w) => `${src}?x-oss-process=image/resize,w_${w}/format,webp/quality,q_70`;
+function showImages(body) {
+  for (const img of body.querySelectorAll("img[data-orig]")) {
+    const src = img.dataset.orig;
+    img.srcset = `${resized(src, 720)} 720w, ${resized(src, 1080)} 1080w`;
+    img.sizes = "(max-width: 760px) 100vw, 900px";
+    img.src = resized(src, 720);
+    img.loading = "lazy";
+    const a = document.createElement("a");
+    a.href = src;
+    a.target = "_blank";
+    a.rel = "noopener";
+    img.replaceWith(a);
+    a.append(img);
+  }
+}
+
 $("#list").addEventListener("click", async (e) => {
+  const imgBtn = e.target.closest(".news-img-btn");
+  if (imgBtn) {
+    showImages(imgBtn.closest(".news-body"));
+    imgBtn.nextElementSibling?.remove();
+    imgBtn.remove();
+    return;
+  }
+  const inner = e.target.closest("a[data-news]");
+  if (inner) {
+    // リンク集の記事から、ほかの記事を開く
+    e.preventDefault();
+    openArticle(+inner.dataset.news);
+    return;
+  }
   const head = e.target.closest(".news-head");
   if (!head) return;
   const item = head.closest(".news-item");
@@ -106,7 +138,12 @@ $("#list").addEventListener("click", async (e) => {
   try {
     const n = news.find((x) => x.id === +item.dataset.id);
     const d = await loadJSON(`news/${n.id}.json`);
-    body.innerHTML = `<div class="news-html">${d.html}</div>
+    // 画像は src を外して読み込まないようにし、「画像を表示」を押したときだけ縮小版を読み込む
+    const html = d.html.replace(/<img src="([^"]+)"[^>]*>/g, (_, src) => `<img data-orig="${src}" alt="">`);
+    const count = (html.match(/data-orig=/g) || []).length;
+    body.innerHTML = `<div class="news-html">${html}</div>
+      ${count ? `<button type="button" class="rp-btn news-img-btn">画像を表示（${count}枚）</button>
+        <p class="small muted" style="margin:6px 0 0">通信量を抑えた縮小版を表示します。画像を押すと元の大きさで開きます。</p>` : ""}
       <p class="small"><a href="${esc(n.url)}" target="_blank" rel="noopener">公式サイトで見る ↗</a></p>`;
     body.dataset.loaded = "1";
   } catch {
@@ -116,14 +153,23 @@ $("#list").addEventListener("click", async (e) => {
 
 render();
 
-// トップページから #記事ID で来たら、その記事を開く
-const target = +location.hash.slice(1);
-if (target && news.some((n) => n.id === target)) {
-  const n = news.find((x) => x.id === target);
-  if (n.category === "サーバー予定") { selected.add(n.category); document.querySelector(`#f-cat .chip[data-v="${n.category}"]`)?.setAttribute("aria-pressed", "true"); render(); }
-  const el = document.querySelector(`.news-item[data-id="${target}"] .news-head`);
+// #記事ID の記事を開く（トップページやリンク集の記事から来たとき）
+function openArticle(id) {
+  const n = news.find((x) => x.id === id);
+  if (!n) { window.open(`https://nobunaga-shinsen.qookkagames.jp/prism-mfqju6aj/#/news/${id}`, "_blank", "noopener"); return; }
+  $("#q").value = "";
+  if (!selected.has(n.category) && (selected.size || n.category === "サーバー予定")) {
+    selected.add(n.category);
+    document.querySelector(`#f-cat .chip[data-v="${n.category}"]`)?.setAttribute("aria-pressed", "true");
+  }
+  const pos = filtered().findIndex((x) => x.id === id);
+  if (pos >= shown) shown = pos + 1;
+  render();
+  const el = document.querySelector(`.news-item[data-id="${id}"] .news-head`);
   if (el) { el.click(); el.scrollIntoView({ block: "start" }); }
+  history.replaceState(null, "", `#${id}`);
 }
+if (+location.hash.slice(1)) openArticle(+location.hash.slice(1));
 </script>
 </body>
 </html>

@@ -79,7 +79,7 @@ function card(s) {
   const long = s.desc.length > 150;
   const people = s.owners.length ? `<span>固有：<b>${esc(s.owners.join("・"))}</b></span>` : "";
   const teach = s.exchange
-    ? `<span title="${esc(s.teachers.join("・"))}">交換${s.exchange !== s.teachers.join("・") ? `（${s.teachers.length}名）` : ""}：<b>${esc(s.exchange)}</b></span>`
+    ? `<span title="${esc(s.teachers.join("・"))}">交換${s.teachers.length && s.exchange !== s.teachers.join("・") ? `（${s.teachers.length}名）` : ""}：<b>${esc(s.exchange)}</b></span>`
     : s.teachers.length ? `<span>伝授元：<b>${esc(s.teachers.join("・"))}</b></span>` : "";
   return `
   <article class="tcard">
