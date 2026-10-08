@@ -54,7 +54,7 @@ def parse(text: str):
         elif key_n.isdigit():
             cur["数値"][key_n] = val
         elif key in ("発動率", "読み", "報告者", "入手", "伝授元", "交換", "備考"):
-            cur["伝授元" if key == "交換" else key] = val
+            cur[key] = val
     return reports
 
 
@@ -80,7 +80,7 @@ def main():
         entry = tactics.setdefault(name, {})
         who = r.get("報告者", "")
         fields = [("発動率", r.get("発動率"))] + [(f"数値{n}", v) for n, v in r["数値"].items()]
-        fields += [("読み", r.get("読み")), ("入手", r.get("入手")), ("伝授元", r.get("伝授元"))]
+        fields += [("読み", r.get("読み")), ("入手", r.get("入手")), ("伝授元", r.get("伝授元")), ("交換", exchange_text(r.get("交換")))]
         if r.get("備考"):
             notes.append(f"{name}：{r['備考']}（{who}）")
             entry.setdefault("備考", []).append(r["備考"] + (f"（{who}）" if who else ""))
@@ -118,6 +118,14 @@ def main():
         for n in notes:
             print("  " + n)
     print("続けて python scripts/build_data.py を実行してください。")
+
+
+def exchange_text(v):
+    """事件戦法の交換武将を表示用の文にする。「AorBorC」「AまたはB」は「A・B・Cのいずれか1名」"""
+    if not v:
+        return v
+    parts = [x.strip() for x in re.split(r"\s*(?:or|OR|Or|または|／|/)\s*", v) if x.strip()]
+    return "・".join(parts) + "のいずれか1名" if len(parts) > 1 else v
 
 
 def norm_val(v: str) -> str:
