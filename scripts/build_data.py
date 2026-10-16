@@ -35,9 +35,6 @@ NAME_FIXES = {
     "挥砍": "薙ぎ払い",
     # multi_lang の訳は「三河武士隊」だが、ゲーム内の戦法名は「三河武士」
     "三河武士队": "三河武士",
-    # 設定ファイルでは「先鋒誘致」（挑発を付与）だが、公式ニュース（PK2 事件戦法紹介）で
-    # 「三方挟撃」（敵軍全体の速度低下）として発表された。後半の効果文・種別・ID が一致する
-    "诱敌深入": "三方挟撃",
 }
 
 
@@ -591,13 +588,13 @@ def main():
         if norm(name) in {norm(x["name"]) for x in skills.values()}:
             continue
         skills[f"extra{i}"] = {
-            "id": 90000 + i, "name": name, "kana": t.get("読み", ""), "kanaUnsure": False,
+            "id": 90000 + i, "name": name, "kana": kana_fix.get(norm(name), t.get("読み", "")), "kanaUnsure": norm(name) in kana_unsure,
             "grade": t["品質"], "kind": t["種別"], "effectTypes": t.get("効果タイプ", []),
             "troops": t.get("兵種", ["騎兵", "弓兵", "鉄砲", "足軽", "兵器"]), "target": t.get("対象", ""),
             "summary": "", "desc": t["効果"], "template": "", "slots": [], "confirmed": True, "confirmedBy": "公式",
             "reported": {}, "needsCheck": [], "descHasValues": True, "valuesNote": "",
             "rate": t.get("発動率", "100%"), "rateUnsure": False, "source": t.get("入手", ""),
-            "owners": [], "teachers": t.get("伝授元", []), "officialOnly": False, "exchange": "",
+            "owners": [], "teachers": t.get("伝授元", []), "officialOnly": False, "exchange": t.get("交換", ""),
             "npcOnly": False,
             "limited": t.get("限定") or ({hero_limited.get(n, "") for n in t.get("伝授元", [])} or {""}).pop() if len({hero_limited.get(n, "") for n in t.get("伝授元", [])}) <= 1 else "",
         }

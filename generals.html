@@ -52,7 +52,35 @@
 import { $, esc, fold, loadJSON, chipGroup, FACTIONS } from "./assets/site.js";
 
 const STATS = [["bu", "武勇"], ["chi", "知略"], ["tou", "統率"], ["spd", "速度"], ["sei", "政務"], ["mi", "魅力"]];
-const [heroes, skills, adjustments] = await Promise.all([loadJSON("heroes.json"), loadJSON("skills.json"), loadJSON("adjustments.json").catch(() => ({}))]);
+const [heroes, skills, adjustments, formations] = await Promise.all([
+  loadJSON("heroes.json"), loadJSON("skills.json"),
+  loadJSON("adjustments.json").catch(() => ({})), loadJSON("formations.json").catch(() => ({ 編制: [], 出典: [] })),
+]);
+const skillByName = new Map(skills.map((s) => [s.name, s]));
+const sources = new Map(formations.出典.map((x) => [x.id, x]));
+
+// 公式のおすすめ編制で、その武将が使っている戦法と編制の一覧
+function recommendFor(name) {
+  const uses = [];
+  for (const f of formations.編制) {
+    const m = f.武将.find((x) => x.武将 === name);
+    if (m) uses.push({ f, m, mates: f.武将.filter((x) => x !== m).map((x) => x.武将) });
+  }
+  const count = new Map();
+  for (const { m } of uses) {
+    for (const t of [...m.第二, ...m.第三]) count.set(t, (count.get(t) || 0) + 1);
+  }
+  const altCount = new Map();
+  for (const { m } of uses) {
+    for (const t of [...m.代替第二, ...m.代替第三]) altCount.set(t, (altCount.get(t) || 0) + 1);
+  }
+  const sort = (mp) => [...mp].sort((a, b) => b[1] - a[1]);
+  return { uses, top: sort(count), alt: sort(altCount) };
+}
+const tacticLink = (t) => {
+  const s = skillByName.get(t);
+  return `<a class="rec-tac" href="tactics.html?q=${encodeURIComponent(t)}">${s ? `<b class="g" data-g="${esc(s.grade)}">${esc(s.grade)}</b>` : ""}${esc(t)}</a>`;
+};
 const skillById = new Map(skills.map((s) => [s.id, s]));
 for (const h of heroes) {
   h._q = fold([h.name, h.kana, h.uniqueSkill, h.family].join(" "));
@@ -209,6 +237,7 @@ function openDetail(h) {
           <div class="tdesc">${esc(s.desc)}</div>
           ${s.troops.length < 5 ? `<p class="small muted">兵種制限：${esc(s.troops.join("・"))}のみ</p>` : ""}` : ""}
       </section>
+      ${recommendSection(h)}
       ${h.traits.length ? `
       <section>
         <h3>武将特性（凸別）</h3>
@@ -219,6 +248,35 @@ function openDetail(h) {
   dlg.showModal();
 }
 $("#dlg").addEventListener("click", (e) => { if (e.target.id === "dlg") e.target.close(); });
+
+function recommendSection(h) {
+  const r = recommendFor(h.name);
+  if (!r.uses.length) return "";
+  const src = (id) => sources.get(id);
+  return `
+    <section>
+      <h3>相性の良い戦法（公式のおすすめ編制より）</h3>
+      <div class="rec-top">${r.top.map(([t, n]) => `<span class="rec-item">${tacticLink(t)}${n > 1 ? `<i>×${n}</i>` : ""}</span>`).join("")}</div>
+      ${r.alt.length ? `<p class="small muted" style="margin:6px 0 0">代わりのA戦法：${r.alt.map(([t]) => tacticLink(t)).join("、")}</p>` : ""}
+      <details class="rec-detail">
+        <summary>採用されている編制（${r.uses.length}件）</summary>
+        ${r.uses.map(({ f, m, mates }) => `
+          <div class="rec-card">
+            <div class="rec-head"><b>${esc(f.名前)}</b>${m.役割 ? `<span class="tag">${esc(m.役割)}</span>` : ""}<span class="small muted">${esc(f.案)}</span></div>
+            <table class="mini rec-table"><tbody>
+              <tr><th>第二戦法</th><td>${m.第二.map(tacticLink).join(" / ") || "—"}${m.代替第二.length ? `<span class="small muted">（代わり：${m.代替第二.map(tacticLink).join(" / ")}）</span>` : ""}</td></tr>
+              <tr><th>第三戦法</th><td>${m.第三.map(tacticLink).join(" / ") || "—"}${m.代替第三.length ? `<span class="small muted">（代わり：${m.代替第三.map(tacticLink).join(" / ")}）</span>` : ""}</td></tr>
+              <tr><th>属性配分</th><td>${esc(m.属性)}</td></tr>
+              <tr><th>兵学</th><td>${esc(m.兵学)}</td></tr>
+              ${m.兵装 ? `<tr><th>兵装</th><td>${esc(m.兵装)}</td></tr>` : ""}
+              <tr><th>一緒に組む</th><td>${mates.map(esc).join("・")}</td></tr>
+            </tbody></table>
+            ${f.備考 ? `<p class="small muted" style="margin:4px 0 0">${esc(f.備考)}</p>` : ""}
+            <p class="small" style="margin:4px 0 0"><a href="news.html#${f.出典}">出典：公式「${esc(src(f.出典)?.title || "")}」（${esc(src(f.出典)?.date || "")}）</a></p>
+          </div>`).join("")}
+      </details>
+    </section>`;
+}
 
 render();
 </script>
