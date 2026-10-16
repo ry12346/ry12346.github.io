@@ -60,6 +60,7 @@ const skillByName = new Map(skills.map((s) => [s.name, s]));
 const sources = new Map(formations.出典.map((x) => [x.id, x]));
 
 // 公式のおすすめ編制で、その武将が使っている戦法と編制の一覧
+const L = (x) => x || [];
 function recommendFor(name) {
   const uses = [];
   for (const f of formations.編制) {
@@ -68,14 +69,17 @@ function recommendFor(name) {
   }
   const count = new Map();
   for (const { m } of uses) {
-    for (const t of [...m.第二, ...m.第三]) count.set(t, (count.get(t) || 0) + 1);
+    for (const t of [...L(m.第二), ...L(m.第三), ...L(m.推奨)]) count.set(t, (count.get(t) || 0) + 1);
   }
   const altCount = new Map();
   for (const { m } of uses) {
-    for (const t of [...m.代替第二, ...m.代替第三]) altCount.set(t, (altCount.get(t) || 0) + 1);
+    for (const t of [...L(m.代替第二), ...L(m.代替第三)]) altCount.set(t, (altCount.get(t) || 0) + 1);
   }
   const sort = (mp) => [...mp].sort((a, b) => b[1] - a[1]);
-  return { uses, top: sort(count), alt: sort(altCount) };
+  // 新武将徹底解説の「推奨戦法」と「評価」（新しい記事から）
+  const notes = L(formations.武将解説).filter((x) => x.武将 === name)
+    .sort((a, b) => String(sources.get(b.出典)?.date).localeCompare(String(sources.get(a.出典)?.date)));
+  return { uses, notes, top: sort(count), alt: sort(altCount) };
 }
 const tacticLink = (t) => {
   const s = skillByName.get(t);
@@ -251,34 +255,56 @@ $("#dlg").addEventListener("click", (e) => { if (e.target.id === "dlg") e.target
 
 function recommendSection(h) {
   const r = recommendFor(h.name);
-  if (!r.uses.length) return "";
+  if (!r.uses.length && !r.notes.length) return "";
   const src = (id) => sources.get(id);
+  const srcLink = (id) => `<a href="news.html#${id}">出典：公式「${esc(src(id)?.title || "")}」（${esc(src(id)?.date || "")}）</a>`;
+  const or = (list) => L(list).map(tacticLink).join(" / ");
   return `
     <section>
-      <h3>相性の良い戦法（公式のおすすめ編制より）</h3>
+      <h3>相性の良い戦法（公式の解説・おすすめ編制より）</h3>
+      ${r.notes.map((n) => `
+        <div class="rec-note">
+          <div class="small muted">公式の推奨戦法</div>
+          <div class="rec-top">${n.推奨.map((t) => `<span class="rec-item">${tacticLink(t)}</span>`).join("")}</div>
+          ${n.評価 ? `<p class="small" style="margin:6px 0 0"><span class="tag kind">評価</span> ${esc(n.評価)}</p>` : ""}
+          <p class="small" style="margin:4px 0 0">${srcLink(n.出典)}</p>
+        </div>`).join("")}
+      ${r.uses.length ? `
+      <div class="small muted" style="margin-top:8px">おすすめ編制での採用回数</div>
       <div class="rec-top">${r.top.map(([t, n]) => `<span class="rec-item">${tacticLink(t)}${n > 1 ? `<i>×${n}</i>` : ""}</span>`).join("")}</div>
       ${r.alt.length ? `<p class="small muted" style="margin:6px 0 0">代わりのA戦法：${r.alt.map(([t]) => tacticLink(t)).join("、")}</p>` : ""}
       <details class="rec-detail">
         <summary>採用されている編制（${r.uses.length}件）</summary>
         ${r.uses.map(({ f, m, mates }) => `
           <div class="rec-card">
-            <div class="rec-head"><b>${esc(f.名前)}</b>${m.役割 ? `<span class="tag">${esc(m.役割)}</span>` : ""}<span class="small muted">${esc(f.案)}</span></div>
+            <div class="rec-head"><b>${esc(f.名前)}</b>${m.役割 ? `<span class="tag">${esc(m.役割)}</span>` : ""}${f.案 ? `<span class="small muted">${esc(f.案)}</span>` : ""}${f.コスト ? `<span class="small muted">コスト${esc(f.コスト)}</span>` : ""}</div>
             <table class="mini rec-table"><tbody>
-              <tr><th>第二戦法</th><td>${m.第二.map(tacticLink).join(" / ") || "—"}${m.代替第二.length ? `<span class="small muted">（代わり：${m.代替第二.map(tacticLink).join(" / ")}）</span>` : ""}</td></tr>
-              <tr><th>第三戦法</th><td>${m.第三.map(tacticLink).join(" / ") || "—"}${m.代替第三.length ? `<span class="small muted">（代わり：${m.代替第三.map(tacticLink).join(" / ")}）</span>` : ""}</td></tr>
-              <tr><th>属性配分</th><td>${esc(m.属性)}</td></tr>
-              <tr><th>兵学</th><td>${esc(m.兵学)}</td></tr>
+              ${m.第二 || m.第三 ? `
+              <tr><th>第二戦法</th><td>${or(m.第二) || "—"}${L(m.代替第二).length ? `<span class="small muted">（代わり：${or(m.代替第二)}）</span>` : ""}</td></tr>
+              <tr><th>第三戦法</th><td>${or(m.第三) || "—"}${L(m.代替第三).length ? `<span class="small muted">（代わり：${or(m.代替第三)}）</span>` : ""}</td></tr>` : ""}
+              ${m.推奨 ? `<tr><th>推奨戦法</th><td>${m.推奨.map(tacticLink).join(" ")}</td></tr>` : ""}
+              ${m.属性 ? `<tr><th>属性配分</th><td>${esc(m.属性)}</td></tr>` : ""}
+              ${m.兵学 ? `<tr><th>兵学</th><td>${esc(m.兵学)}</td></tr>` : ""}
               ${m.兵装 ? `<tr><th>兵装</th><td>${esc(m.兵装)}</td></tr>` : ""}
               <tr><th>一緒に組む</th><td>${mates.map(esc).join("・")}</td></tr>
             </tbody></table>
+            ${f.方針 ? `<p class="small" style="margin:4px 0 0">${esc(f.方針)}</p>` : ""}
             ${f.備考 ? `<p class="small muted" style="margin:4px 0 0">${esc(f.備考)}</p>` : ""}
-            <p class="small" style="margin:4px 0 0"><a href="news.html#${f.出典}">出典：公式「${esc(src(f.出典)?.title || "")}」（${esc(src(f.出典)?.date || "")}）</a></p>
+            <p class="small" style="margin:4px 0 0">${srcLink(f.出典)}</p>
           </div>`).join("")}
-      </details>
+      </details>` : ""}
     </section>`;
 }
 
-render();
+const initialQ = new URLSearchParams(location.search).get("q");
+if (initialQ) {
+  $("#q").value = initialQ;
+  render();
+  const exact = heroes.find((h) => h.name === initialQ);
+  if (exact) openDetail(exact);
+} else {
+  render();
+}
 </script>
 </body>
 </html>

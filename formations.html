@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f3443">
+<title>おすすめ編成 | 真戦データ帳</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%231f3443%27/%3E%3Ctext x=%2732%27 y=%2745%27 font-size=%2736%27 text-anchor=%27middle%27 fill=%27%23f2d9a8%27 font-weight=%27900%27%3E%E7%9C%9F%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="page-head">
+    <div class="eyebrow">FORMATIONS</div>
+    <h1>おすすめ編成</h1>
+    <p>公式ニュースで紹介された編制の一覧です。「A / B」はどちらか、「代わり」は手持ちが無いときのA戦法です。シーズンによって環境や調整が違うので、発表日も参考にしてください。</p>
+  </div>
+
+  <div class="card filters">
+    <div class="frow"><input class="search" id="q" type="search" placeholder="武将名・戦法名で検索（例：島津義久、深慮遠謀）" autocomplete="off"></div>
+    <div class="frow" id="f-season"><label>シーズン</label></div>
+    <div class="frow" id="f-troop"><label>兵種</label></div>
+  </div>
+
+  <div class="toolbar"><span class="count" id="count"></span></div>
+  <div class="fm-list" id="list"></div>
+</main>
+
+<script type="module">
+import { $, esc, fold, loadJSON, chipGroup } from "./assets/site.js";
+
+const [data, skills] = await Promise.all([loadJSON("formations.json"), loadJSON("skills.json")]);
+const skillByName = new Map(skills.map((s) => [s.name, s]));
+const sources = new Map(data.出典.map((x) => [x.id, x]));
+const TROOPS = ["騎兵", "弓兵", "鉄砲", "足軽"];
+
+const formations = data.編制.map((f, i) => {
+  const troop = TROOPS.find((t) => f.名前.includes(t)) || "その他";
+  const src = sources.get(f.出典) || {};
+  const words = [f.名前, f.備考 || "", ...f.武将.flatMap((m) => [m.武将, ...(m.第二 || []), ...(m.第三 || []), ...(m.代替第二 || []), ...(m.代替第三 || []), ...(m.推奨 || [])])];
+  return { ...f, i, troop, season: f.シーズン || src.シーズン || "", src, _q: fold(words.join(" ")) };
+}).sort((a, b) => String(b.src.date || "").localeCompare(String(a.src.date || "")) || a.i - b.i); // 新しい記事から
+
+const seasons = [...new Set(formations.map((f) => f.season).filter(Boolean))];
+const seasonF = chipGroup($("#f-season"), seasons, render);
+const troopF = chipGroup($("#f-troop"), TROOPS.filter((t) => formations.some((f) => f.troop === t)), render);
+$("#q").addEventListener("input", render);
+
+const tac = (t) => {
+  const s = skillByName.get(t);
+  return `<a class="rec-tac" href="tactics.html?q=${encodeURIComponent(t)}">${s ? `<b class="g" data-g="${esc(s.grade)}">${esc(s.grade)}</b>` : ""}${esc(t)}</a>`;
+};
+const tacList = (list) => (list && list.length ? list.map(tac).join('<span class="fm-or">/</span>') : "");
+
+function member(m) {
+  const rows = [];
+  if (m.第二 || m.第三) {
+    rows.push(["第二戦法", tacList(m.第二) + (m.代替第二?.length ? `<span class="small muted">（代わり ${tacList(m.代替第二)}）</span>` : "")]);
+    rows.push(["第三戦法", tacList(m.第三) + (m.代替第三?.length ? `<span class="small muted">（代わり ${tacList(m.代替第三)}）</span>` : "")]);
+  }
+  if (m.推奨) rows.push(["推奨戦法", m.推奨.map(tac).join(" ")]);
+  if (m.属性) rows.push(["属性配分", esc(m.属性)]);
+  if (m.兵学) rows.push(["兵学", esc(m.兵学)]);
+  if (m.兵装) rows.push(["兵装", esc(m.兵装)]);
+  return `
+    <div class="fm-member">
+      <div class="fm-name"><a href="generals.html?q=${encodeURIComponent(m.武将)}">${esc(m.武将)}</a>${m.役割 ? `<span class="tag">${esc(m.役割)}</span>` : ""}</div>
+      <table class="mini rec-table"><tbody>${rows.filter(([, v]) => v).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</tbody></table>
+    </div>`;
+}
+
+function render() {
+  const q = fold($("#q").value);
+  const rows = formations.filter((f) => seasonF.test(f.season) && troopF.test(f.troop) && (!q || f._q.includes(q)));
+  $("#count").textContent = `${rows.length} / ${formations.length} 編制`;
+  $("#list").innerHTML = rows.map((f) => `
+    <article class="fm-card">
+      <div class="fm-head">
+        <h3>${esc(f.名前)}</h3>
+        <div class="tags">
+          ${f.season ? `<span class="tag kind">${esc(f.season)}</span>` : ""}
+          ${f.案 ? `<span class="tag">${esc(f.案)}</span>` : ""}
+          ${f.コスト ? `<span class="tag">コスト ${esc(f.コスト)}</span>` : ""}
+        </div>
+      </div>
+      ${f.方針 ? `<p class="small" style="margin:0">${esc(f.方針)}</p>` : ""}
+      <div class="fm-members">${f.武将.map(member).join("")}</div>
+      ${f.備考 ? `<p class="small muted" style="margin:0">${esc(f.備考)}</p>` : ""}
+      <p class="small" style="margin:0"><a href="news.html#${f.出典}">出典：公式「${esc(f.src.title || "")}」（${esc(f.src.date || "")}）</a></p>
+    </article>`).join("") || `<div class="empty card">該当する編制がありません</div>`;
+}
+
+const initialQ = new URLSearchParams(location.search).get("q");
+if (initialQ) $("#q").value = initialQ;
+render();
+</script>
+</body>
+</html>

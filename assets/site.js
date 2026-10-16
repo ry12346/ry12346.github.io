@@ -3,6 +3,7 @@ const NAV = [
   ["index.html", "トップ"],
   ["generals.html", "武将一覧"],
   ["tactics.html", "戦法一覧"],
+  ["formations.html", "おすすめ編成"],
   ["exp.html", "経験値・資料"],
   ["news.html", "公式ニュース"],
   ["report.html", "情報提供"],

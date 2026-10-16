@@ -232,7 +232,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 16px 40px;font-size:11px;color:v
 .home-news .news-title{flex:1 1 200px}
 @media (max-width:760px){
   /* メニューは横スクロールではなく 3列×2段 のボタンにする */
-  .nav{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;overflow:visible;padding-bottom:4px}
+  .nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;overflow:visible;padding-bottom:4px}
   .nav a{text-align:center;padding:6px 2px;font-size:12px;border:1px solid rgba(255,255,255,.18)}
   .tcard-head{flex-wrap:wrap}
   .tcard-head .tags{margin-left:0;justify-content:flex-start;width:100%}
@@ -246,6 +246,7 @@ footer{max-width:1180px;margin:0 auto;padding:0 16px 40px;font-size:11px;color:v
 .rec-top{display:flex;flex-wrap:wrap;gap:6px}
 .rec-item{display:inline-flex;align-items:center;gap:3px}
 .rec-item i{font-style:normal;font-size:11px;color:var(--muted)}
+.rec-note{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface2);margin-bottom:8px}
 .rec-tac{display:inline-flex;align-items:center;gap:4px;text-decoration:none;background:#f4f1ea;border:1px solid var(--line);border-radius:8px;padding:2px 8px;font-size:13px;font-weight:700;white-space:nowrap}
 .rec-tac:hover{border-color:#c4a56f}
 .rec-tac .g{font-size:10px;color:#fff;border-radius:4px;padding:0 4px;background:#8b8f94}
@@ -260,3 +261,18 @@ footer{max-width:1180px;margin:0 auto;padding:0 16px 40px;font-size:11px;color:v
   .dlg-body{padding:14px 12px 18px}
   .dlg-body table.mini th,.dlg-body table.mini td{padding:5px 3px;font-size:12px}
 }
+
+/* ---------- formations page ---------- */
+.fm-list{display:grid;gap:12px}
+.fm-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px;display:grid;gap:10px}
+.fm-head{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.fm-head h3{margin:0;font-size:17px}
+.fm-head .tags{margin-left:auto}
+.fm-members{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.fm-member{border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:#fcfbf8;min-width:0}
+.fm-name{display:flex;align-items:center;gap:6px;font-weight:800;font-size:15px;margin-bottom:4px}
+.fm-name a{text-decoration:none}
+.fm-name a:hover{text-decoration:underline}
+.fm-or{color:var(--muted);margin:0 2px}
+.fm-member .rec-tac{margin:1px 0}
+@media (max-width:900px){.fm-members{grid-template-columns:1fr}}

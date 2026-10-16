@@ -48,16 +48,20 @@ const GRADES = ["S", "A", "B", "C", "D"];
 const skills = await loadJSON("skills.json");
 const adjustments = await loadJSON("adjustments.json").catch(() => ({}));
 const formations = await loadJSON("formations.json").catch(() => ({ 編制: [] }));
-// 公式のおすすめ編制で、その戦法（第二・第三戦法）を使っている武将
+// 公式のおすすめ編制・武将解説で、その戦法を推奨されている武将
 const recommendedBy = new Map();
+const addRec = (t, name) => {
+  if (!recommendedBy.has(t)) recommendedBy.set(t, new Set());
+  recommendedBy.get(t).add(name);
+};
 for (const f of formations.編制) {
   for (const m of f.武将) {
-    for (const t of [...m.第二, ...m.第三]) {
-      if (!recommendedBy.has(t)) recommendedBy.set(t, new Set());
-      recommendedBy.get(t).add(m.武将);
-    }
+    for (const t of [...(m.第二 || []), ...(m.第三 || []), ...(m.推奨 || [])]) addRec(t, m.武将);
   }
 }
+for (const x of formations.武将解説 || []) for (const t of x.推奨) addRec(t, x.武将);
+// 多いときは先頭10名＋「ほかn名」（全員は title で見られる）
+const recText = (names) => `<span title="${esc(names.join("・"))}">公式のおすすめ：<b>${esc(names.slice(0, 10).join("・"))}</b>${names.length > 10 ? ` ほか${names.length - 10}名` : ""}</span>`;
 
 const uniq = (arr) => [...new Set(arr)];
 const order = (list, pref) => list.sort((a, b) => (pref.indexOf(a) + 1 || 99) - (pref.indexOf(b) + 1 || 99) || a.localeCompare(b, "ja"));
@@ -122,7 +126,7 @@ function card(s) {
     <div class="tmeta">
       <span class="troops">${TROOPS.map((t) => `<i class="${s.troops.includes(t) ? "on" : ""}">${t}</i>`).join("")}</span>
       ${people}${teach}
-      ${recommendedBy.has(s.name) ? `<span>公式のおすすめ編制で採用：<b>${esc([...recommendedBy.get(s.name)].join("・"))}</b></span>` : ""}
+      ${recommendedBy.has(s.name) ? recText([...recommendedBy.get(s.name)]) : ""}
     </div>
   </article>`;
 }
