@@ -40,7 +40,7 @@
 </main>
 
 <script type="module">
-import { $, esc, fold, loadJSON, chipGroup } from "./assets/site.js";
+import { $, esc, fold, loadJSON, chipGroup, setQuery, getQuery, keepScroll } from "./assets/site.js";
 
 const TROOPS = ["騎兵", "弓兵", "鉄砲", "足軽", "兵器"];
 const KINDS = ["能動", "突撃", "受動", "指揮", "兵種", "陣法"];
@@ -132,6 +132,7 @@ function card(s) {
 }
 
 function render() {
+  setQuery({ q: $("#q").value, kind: kindF.values(), grade: gradeF.values(), src: srcF.values(), type: typeF.values(), troop: troopF.values(), sort: sort === "grade" ? "" : sort, all: showUnofficial });
   const q = fold($("#q").value);
   const rows = skills.filter((s) =>
     kindF.test(s.kind) && gradeF.test(s.grade) && srcF.test(s.source) && typeF.test(s.effectTypes) && troopF.test(s.troops) && (!q || s._q.includes(q)) && (showUnofficial || !s.officialOnly));
@@ -150,9 +151,21 @@ $("#list").addEventListener("click", (e) => {
   b.remove();
 });
 
-const initialQ = new URLSearchParams(location.search).get("q");
-if (initialQ) $("#q").value = initialQ;
+// 検索条件は URL に残す（リンク先から戻ったとき、見ていた状態に戻すため）
+$("#q").value = getQuery("q");
+kindF.set(getQuery("kind", true));
+gradeF.set(getQuery("grade", true));
+srcF.set(getQuery("src", true));
+typeF.set(getQuery("type", true));
+troopF.set(getQuery("troop", true));
+showUnofficial = $("#show-unofficial").checked = getQuery("all") === "1";
+const initialSort = $(`#sort button[data-s="${CSS.escape(getQuery("sort") || "grade")}"]`);
+if (initialSort) {
+  sort = initialSort.dataset.s;
+  for (const x of $("#sort").children) x.setAttribute("aria-pressed", x === initialSort);
+}
 render();
+keepScroll("tactics-scroll");
 </script>
 </body>
 </html>

@@ -49,7 +49,7 @@
 <dialog id="dlg"></dialog>
 
 <script type="module">
-import { $, esc, fold, loadJSON, chipGroup, FACTIONS } from "./assets/site.js";
+import { $, esc, fold, loadJSON, chipGroup, FACTIONS, setQuery, getQuery, keepScroll, isBackNav } from "./assets/site.js";
 
 const STATS = [["bu", "武勇"], ["chi", "知略"], ["tou", "統率"], ["spd", "速度"], ["sei", "政務"], ["mi", "魅力"]];
 const [heroes, skills, adjustments, formations] = await Promise.all([
@@ -120,17 +120,24 @@ const starF = chipGroup($("#f-star"), [5, 4], render, { label: (v) => "★" + v 
 const costF = chipGroup($("#f-cost"), [7, 6, 5, 4, 3], render);
 $("#q").addEventListener("input", render);
 
+function setMode(m) {
+  mode = m;
+  for (const x of $("#mode").children) x.setAttribute("aria-pressed", x.dataset.mode === m);
+  $("#lv-ctl").hidden = mode !== "lv";
+}
+function setLevel(v) {
+  level = v;
+  $("#lv").value = v;
+  $("#lv-out").textContent = level;
+}
 $("#mode").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  mode = b.dataset.mode;
-  for (const x of $("#mode").children) x.setAttribute("aria-pressed", x === b);
-  $("#lv-ctl").hidden = mode !== "lv";
+  setMode(b.dataset.mode);
   render();
 });
 $("#lv").addEventListener("input", (e) => {
-  level = +e.target.value;
-  $("#lv-out").textContent = level;
+  setLevel(+e.target.value);
   render();
 });
 
@@ -142,10 +149,24 @@ thead.addEventListener("click", (e) => {
   const k = th.dataset.k;
   if (sortKey === k) sortDir = -sortDir;
   else { sortKey = k; sortDir = ["name", "faction", "unique", "troop"].includes(k) ? 1 : -1; }
-  for (const x of thead.children) x.removeAttribute("aria-sort");
-  th.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
+  showSort();
   render();
 });
+function showSort() {
+  for (const x of thead.children) {
+    if (x.dataset.k === sortKey) x.setAttribute("aria-sort", sortDir === 1 ? "ascending" : "descending");
+    else x.removeAttribute("aria-sort");
+  }
+}
+
+// 検索条件と開いている武将は URL に残す（戦法などのリンク先から戻ったとき、見ていた状態に戻すため）
+let openName = "";
+function saveState() {
+  setQuery({
+    q: $("#q").value, faction: factionF.values(), star: starF.values(), cost: costF.values(),
+    lv: mode === "lv" ? level : "", sort: sortKey ? `${sortKey}${sortDir === 1 ? "" : "-"}` : "", h: openName,
+  });
+}
 
 function fmt(v, digits = 0) {
   return v == null ? '<span class="na">—</span>' : v.toFixed(digits);
@@ -161,6 +182,7 @@ function statCell(h, k) {
 }
 
 function render() {
+  saveState();
   const q = fold($("#q").value);
   let rows = heroes.filter((h) => factionF.test(h.faction) && starF.test(h.star) && costF.test(h.cost) && (!q || h._q.includes(q)));
   if (sortKey) {
@@ -197,6 +219,8 @@ $("#tbl tbody").addEventListener("click", (e) => {
 function openDetail(h) {
   const s = skillById.get(h.uniqueSkillId);
   const dlg = $("#dlg");
+  openName = h.name;
+  saveState();
   dlg.innerHTML = `
     <div class="dlg-head">
       <button class="dlg-close" aria-label="閉じる">✕</button>
@@ -248,10 +272,16 @@ function openDetail(h) {
         ${h.traits.map((t) => `<div class="trait"><span class="rk">${esc(t.rank)}</span><div><b>${esc(t.name)}</b><p>${esc(t.effect)}</p></div></div>`).join("")}
       </section>` : ""}
     </div>`;
-  dlg.querySelector(".dlg-close").onclick = () => dlg.close();
+  dlg.querySelector(".dlg-close").onclick = closeDetail;
   dlg.showModal();
 }
-$("#dlg").addEventListener("click", (e) => { if (e.target.id === "dlg") e.target.close(); });
+function closeDetail() {
+  $("#dlg").close();
+  openName = "";
+  saveState();
+}
+$("#dlg").addEventListener("click", (e) => { if (e.target.id === "dlg") closeDetail(); });
+$("#dlg").addEventListener("close", () => { openName = ""; saveState(); }); // Esc キーで閉じたとき
 
 function recommendSection(h) {
   const r = recommendFor(h.name);
@@ -296,15 +326,23 @@ function recommendSection(h) {
     </section>`;
 }
 
-const initialQ = new URLSearchParams(location.search).get("q");
-if (initialQ) {
-  $("#q").value = initialQ;
-  render();
-  const exact = heroes.find((h) => h.name === initialQ);
-  if (exact) openDetail(exact);
-} else {
-  render();
+$("#q").value = getQuery("q");
+factionF.set(getQuery("faction", true));
+starF.set(getQuery("star", true));
+costF.set(getQuery("cost", true));
+if (getQuery("lv")) { setMode("lv"); setLevel(Math.min(50, Math.max(1, +getQuery("lv") || 50))); }
+const sortQ = getQuery("sort");
+if (sortQ && COLS.some((c) => c.key === sortQ.replace(/-$/, ""))) {
+  sortKey = sortQ.replace(/-$/, "");
+  sortDir = sortQ.endsWith("-") ? -1 : 1;
+  showSort();
 }
+// 開く武将：「戻る」で来たときは前に開いていた武将、ほかのページから ?q=武将名 で来たときはその武将
+const openTarget = getQuery("h") || (isBackNav() ? "" : getQuery("q"));
+render();
+keepScroll("generals-scroll");
+const exact = heroes.find((h) => h.name === openTarget);
+if (exact) openDetail(exact);
 </script>
 </body>
 </html>

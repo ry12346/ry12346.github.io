@@ -107,4 +107,40 @@ export function chipGroup(container, values, onChange, { label = (v) => v } = {}
   };
 }
 
+// ---- 一覧ページの状態保持（リンク先から「戻る」で帰ってきたとき、見ていた状態に戻す） ----
+
+/** ブラウザの「戻る」「進む」で開かれたか */
+export const isBackNav = () => performance.getEntriesByType("navigation")[0]?.type === "back_forward";
+
+/** 絞り込み条件を URL に書く（空の値は省く。配列は「,」区切り） */
+export function setQuery(obj) {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(obj)) {
+    const s = Array.isArray(v) ? v.join(",") : v;
+    if (s != null && s !== "" && s !== false) p.set(k, s === true ? "1" : s);
+  }
+  const qs = p.toString();
+  history.replaceState(null, "", (qs ? `?${qs}` : location.pathname) + location.hash);
+}
+
+/** URL の値を読む。list=true なら「,」区切りの配列 */
+export function getQuery(key, list = false) {
+  const v = new URLSearchParams(location.search).get(key) || "";
+  return list ? v.split(",").filter(Boolean) : v;
+}
+
+/** スクロール位置を覚えておき、「戻る」で帰ってきたときに復元する。描画が終わってから呼ぶ */
+export function keepScroll(key) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(key) || "null");
+    if (isBackNav() && saved && saved.url === location.search) {
+      history.scrollRestoration = "manual";
+      requestAnimationFrame(() => window.scrollTo(0, saved.y));
+    }
+  } catch {}
+  addEventListener("pagehide", () => {
+    try { sessionStorage.setItem(key, JSON.stringify({ url: location.search, y: scrollY })); } catch {}
+  });
+}
+
 renderChrome();

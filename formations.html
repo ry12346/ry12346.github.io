@@ -28,7 +28,7 @@
 </main>
 
 <script type="module">
-import { $, esc, fold, loadJSON, chipGroup } from "./assets/site.js";
+import { $, esc, fold, loadJSON, chipGroup, setQuery, getQuery, keepScroll } from "./assets/site.js";
 
 const [data, skills] = await Promise.all([loadJSON("formations.json"), loadJSON("skills.json")]);
 const skillByName = new Map(skills.map((s) => [s.name, s]));
@@ -94,32 +94,13 @@ function render() {
 
 // 検索条件は URL に残す（武将・戦法のリンク先から戻ったとき、見ていた状態に戻すため）
 function saveState() {
-  const p = new URLSearchParams();
-  if ($("#q").value) p.set("q", $("#q").value);
-  if (seasonF.values().length) p.set("season", seasonF.values().join(","));
-  if (troopF.values().length) p.set("troop", troopF.values().join(","));
-  const qs = p.toString();
-  history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
+  setQuery({ q: $("#q").value, season: seasonF.values(), troop: troopF.values() });
 }
-const params = new URLSearchParams(location.search);
-$("#q").value = params.get("q") || "";
-seasonF.set((params.get("season") || "").split(",").filter(Boolean));
-troopF.set((params.get("troop") || "").split(",").filter(Boolean));
+$("#q").value = getQuery("q");
+seasonF.set(getQuery("season", true));
+troopF.set(getQuery("troop", true));
 render();
-
-// スクロール位置も戻す（描画が非同期なのでブラウザ任せだと戻らない）
-const SCROLL_KEY = "formations-scroll";
-try {
-  const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "null");
-  const back = performance.getEntriesByType("navigation")[0]?.type === "back_forward";
-  if (back && saved && saved.url === location.search) {
-    history.scrollRestoration = "manual";
-    requestAnimationFrame(() => window.scrollTo(0, saved.y));
-  }
-} catch {}
-addEventListener("pagehide", () => {
-  try { sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ url: location.search, y: scrollY })); } catch {}
-});
+keepScroll("formations-scroll");
 </script>
 </body>
 </html>
