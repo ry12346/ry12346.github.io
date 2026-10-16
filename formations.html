@@ -38,7 +38,7 @@ const TROOPS = ["騎兵", "弓兵", "鉄砲", "足軽"];
 const formations = data.編制.map((f, i) => {
   const troop = TROOPS.find((t) => f.名前.includes(t)) || "その他";
   const src = sources.get(f.出典) || {};
-  const words = [f.名前, f.備考 || "", ...f.武将.flatMap((m) => [m.武将, ...(m.第二 || []), ...(m.第三 || []), ...(m.代替第二 || []), ...(m.代替第三 || []), ...(m.推奨 || [])])];
+  const words = [f.名前, f.備考 || "", ...f.武将.flatMap((m) => [m.武将, ...(m.第一 || []), ...(m.第二 || []), ...(m.代替第一 || []), ...(m.代替第二 || []), ...(m.推奨 || [])])];
   return { ...f, i, troop, season: f.シーズン || src.シーズン || "", src, _q: fold(words.join(" ")) };
 }).sort((a, b) => String(b.src.date || "").localeCompare(String(a.src.date || "")) || a.i - b.i); // 新しい記事から
 
@@ -55,9 +55,9 @@ const tacList = (list) => (list && list.length ? list.map(tac).join('<span class
 
 function member(m) {
   const rows = [];
-  if (m.第二 || m.第三) {
+  if (m.第一 || m.第二) {
+    rows.push(["第一戦法", tacList(m.第一) + (m.代替第一?.length ? `<span class="small muted">（代わり ${tacList(m.代替第一)}）</span>` : "")]);
     rows.push(["第二戦法", tacList(m.第二) + (m.代替第二?.length ? `<span class="small muted">（代わり ${tacList(m.代替第二)}）</span>` : "")]);
-    rows.push(["第三戦法", tacList(m.第三) + (m.代替第三?.length ? `<span class="small muted">（代わり ${tacList(m.代替第三)}）</span>` : "")]);
   }
   if (m.推奨) rows.push(["推奨戦法", m.推奨.map(tac).join(" ")]);
   if (m.属性) rows.push(["属性配分", esc(m.属性)]);
@@ -71,6 +71,7 @@ function member(m) {
 }
 
 function render() {
+  saveState();
   const q = fold($("#q").value);
   const rows = formations.filter((f) => seasonF.test(f.season) && troopF.test(f.troop) && (!q || f._q.includes(q)));
   $("#count").textContent = `${rows.length} / ${formations.length} 編制`;
@@ -91,9 +92,34 @@ function render() {
     </article>`).join("") || `<div class="empty card">該当する編制がありません</div>`;
 }
 
-const initialQ = new URLSearchParams(location.search).get("q");
-if (initialQ) $("#q").value = initialQ;
+// 検索条件は URL に残す（武将・戦法のリンク先から戻ったとき、見ていた状態に戻すため）
+function saveState() {
+  const p = new URLSearchParams();
+  if ($("#q").value) p.set("q", $("#q").value);
+  if (seasonF.values().length) p.set("season", seasonF.values().join(","));
+  if (troopF.values().length) p.set("troop", troopF.values().join(","));
+  const qs = p.toString();
+  history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
+}
+const params = new URLSearchParams(location.search);
+$("#q").value = params.get("q") || "";
+seasonF.set((params.get("season") || "").split(",").filter(Boolean));
+troopF.set((params.get("troop") || "").split(",").filter(Boolean));
 render();
+
+// スクロール位置も戻す（描画が非同期なのでブラウザ任せだと戻らない）
+const SCROLL_KEY = "formations-scroll";
+try {
+  const saved = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || "null");
+  const back = performance.getEntriesByType("navigation")[0]?.type === "back_forward";
+  if (back && saved && saved.url === location.search) {
+    history.scrollRestoration = "manual";
+    requestAnimationFrame(() => window.scrollTo(0, saved.y));
+  }
+} catch {}
+addEventListener("pagehide", () => {
+  try { sessionStorage.setItem(SCROLL_KEY, JSON.stringify({ url: location.search, y: scrollY })); } catch {}
+});
 </script>
 </body>
 </html>

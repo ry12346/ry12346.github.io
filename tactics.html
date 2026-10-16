@@ -56,7 +56,7 @@ const addRec = (t, name) => {
 };
 for (const f of formations.編制) {
   for (const m of f.武将) {
-    for (const t of [...(m.第二 || []), ...(m.第三 || []), ...(m.推奨 || [])]) addRec(t, m.武将);
+    for (const t of [...(m.第一 || []), ...(m.第二 || []), ...(m.推奨 || [])]) addRec(t, m.武将);
   }
 }
 for (const x of formations.武将解説 || []) for (const t of x.推奨) addRec(t, x.武将);

@@ -69,11 +69,11 @@ function recommendFor(name) {
   }
   const count = new Map();
   for (const { m } of uses) {
-    for (const t of [...L(m.第二), ...L(m.第三), ...L(m.推奨)]) count.set(t, (count.get(t) || 0) + 1);
+    for (const t of [...L(m.第一), ...L(m.第二), ...L(m.推奨)]) count.set(t, (count.get(t) || 0) + 1);
   }
   const altCount = new Map();
   for (const { m } of uses) {
-    for (const t of [...L(m.代替第二), ...L(m.代替第三)]) altCount.set(t, (altCount.get(t) || 0) + 1);
+    for (const t of [...L(m.代替第一), ...L(m.代替第二)]) altCount.set(t, (altCount.get(t) || 0) + 1);
   }
   const sort = (mp) => [...mp].sort((a, b) => b[1] - a[1]);
   // 新武将徹底解説の「推奨戦法」と「評価」（新しい記事から）
@@ -279,9 +279,9 @@ function recommendSection(h) {
           <div class="rec-card">
             <div class="rec-head"><b>${esc(f.名前)}</b>${m.役割 ? `<span class="tag">${esc(m.役割)}</span>` : ""}${f.案 ? `<span class="small muted">${esc(f.案)}</span>` : ""}${f.コスト ? `<span class="small muted">コスト${esc(f.コスト)}</span>` : ""}</div>
             <table class="mini rec-table"><tbody>
-              ${m.第二 || m.第三 ? `
-              <tr><th>第二戦法</th><td>${or(m.第二) || "—"}${L(m.代替第二).length ? `<span class="small muted">（代わり：${or(m.代替第二)}）</span>` : ""}</td></tr>
-              <tr><th>第三戦法</th><td>${or(m.第三) || "—"}${L(m.代替第三).length ? `<span class="small muted">（代わり：${or(m.代替第三)}）</span>` : ""}</td></tr>` : ""}
+              ${m.第一 || m.第二 ? `
+              <tr><th>第一戦法</th><td>${or(m.第一) || "—"}${L(m.代替第一).length ? `<span class="small muted">（代わり：${or(m.代替第一)}）</span>` : ""}</td></tr>
+              <tr><th>第二戦法</th><td>${or(m.第二) || "—"}${L(m.代替第二).length ? `<span class="small muted">（代わり：${or(m.代替第二)}）</span>` : ""}</td></tr>` : ""}
               ${m.推奨 ? `<tr><th>推奨戦法</th><td>${m.推奨.map(tacticLink).join(" ")}</td></tr>` : ""}
               ${m.属性 ? `<tr><th>属性配分</th><td>${esc(m.属性)}</td></tr>` : ""}
               ${m.兵学 ? `<tr><th>兵学</th><td>${esc(m.兵学)}</td></tr>` : ""}

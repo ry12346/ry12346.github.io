@@ -97,6 +97,13 @@ export function chipGroup(container, values, onChange, { label = (v) => v } = {}
   });
   return {
     test: (v) => selected.size === 0 || (Array.isArray(v) ? v.some((x) => selected.has(String(x))) : selected.has(String(v))),
+    values: () => [...selected],
+    /** 選択状態を外から復元する（onChange は呼ばない） */
+    set(list) {
+      selected.clear();
+      for (const v of list) if (values.map(String).includes(v)) selected.add(v);
+      container.querySelectorAll(".chip").forEach((b) => b.setAttribute("aria-pressed", selected.has(b.dataset.v)));
+    },
   };
 }
 
